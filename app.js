@@ -488,3 +488,20 @@ function bind(){
 }
 
 loadProfiles().then(bind);
+const fullscreenTarget = document.querySelector(".viewerInner");
+
+function toggleFullscreen(){
+  if(!document.fullscreenElement){
+    fullscreenTarget.requestFullscreen();
+  } else {
+    document.exitFullscreen();
+  }
+}
+
+// knop
+safeOn("fullscreenBtn","click", toggleFullscreen);
+
+// shortcut
+document.addEventListener("keydown", (e)=>{
+  if(e.key.toLowerCase() === "p") toggleFullscreen();
+});
