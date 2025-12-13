@@ -1,4 +1,3 @@
-
 {
   "DZO Arles (clean)": {
     "globalSoft": 0.0,
@@ -11,9 +10,9 @@
   },
   "IronGlass Soviet MKII (50mm T2.8)": {
     "globalSoft": 0.22,
-    "edgeSoftness": 0.9,
+    "edgeSoftness": 0.90,
     "coma": 0.35,
-    "bloom": 0.6,
+    "bloom": 0.60,
     "bloomWarmth": 0.15,
     "halation": 0.35,
     "veil": 0.18
