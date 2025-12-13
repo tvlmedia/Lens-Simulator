@@ -1,34 +1,28 @@
+/* TVL Lens Emulator — UNIVERSAL APP (fixes "no photo" issue)
+   Works with BOTH:
+   - MVP index.html (no ref/split button)
+   - Split+Reference index (refInput/refCanvas/splitBtn)
 
-/* TVL Lens Emulator — v4 FIX (works with current index.html)
-   Key fix: DO NOT create a 2D context on the WebGL canvas.
-   (If you do canvas.getContext("2d") first, WebGL fails silently and nothing renders.)
-
-   Supports:
-   - Clean upload -> WebGL render
-   - Reference upload -> split (CSS clip-path)
-   - Sliders (numbers + ranges)
-   - Export PNG / Export Split
-   - Split button + "S"
-   - Fullscreen button + "P"
+   CRITICAL FIX:
+   - NEVER call canvas.getContext("2d") on the WebGL canvas.
 */
 
 const $ = (id) => document.getElementById(id);
 function safeOn(id, evt, fn){ const el = $(id); if(el) el.addEventListener(evt, fn); }
 
-const canvas = $("canvas");                 // WebGL output
-const refCanvas = $("refCanvas");           // 2D reference layer
-const refCtx = refCanvas ? refCanvas.getContext("2d", { willReadFrequently:true }) : null;
+const canvas = $("canvas"); // WebGL canvas
+let srcImg = null, srcW = 0, srcH = 0;
 
-let srcImg = null;
+const refCanvas = $("refCanvas"); // optional
+const refCtx = refCanvas ? refCanvas.getContext("2d", { willReadFrequently:true }) : null;
 let refImg = null;
-let srcW = 0, srcH = 0;
 
 let profiles = {};
 let activeName = "";
 let liveParams = {};
 let splitOn = false;
 
-// v4 parameters (match gl.js v4). Keep your earlier lens params out for now.
+// Param list (only keys your gl.js understands)
 const PARAMS = [
   { key:"globalSoft",   label:"Global softness", min:0,    max:0.6, step:0.01 },
   { key:"edgeSoftness", label:"Edge softness",   min:0,    max:2.0, step:0.01 },
@@ -39,10 +33,7 @@ const PARAMS = [
   { key:"veil",         label:"Veil",            min:0,    max:0.6, step:0.01 }
 ];
 
-function clamp(v, min, max){
-  if(Number.isNaN(v)) return min;
-  return Math.max(min, Math.min(max, v));
-}
+function clamp(v,min,max){ v = parseFloat(v); if(Number.isNaN(v)) v=min; return Math.max(min, Math.min(max, v)); }
 
 function setStatus(text, good=false){
   const pill = $("infoPill");
@@ -61,18 +52,10 @@ function resizeCanvases(w,h){
   if(refCanvas){ refCanvas.width = w; refCanvas.height = h; }
 }
 
-function drawRef(){
-  if(!refCtx || !srcImg) return;
-  const img = refImg || srcImg;
-  refCtx.setTransform(1,0,0,1,0,0);
-  refCtx.clearRect(0,0,srcW,srcH);
-  refCtx.drawImage(img, 0, 0, srcW, srcH);
-}
-
 function ensureDefaults(){
   PARAMS.forEach(d=>{
     if(liveParams[d.key] === undefined || liveParams[d.key] === null) liveParams[d.key] = 0;
-    liveParams[d.key] = clamp(parseFloat(liveParams[d.key]), d.min, d.max);
+    liveParams[d.key] = clamp(liveParams[d.key], d.min, d.max);
   });
 }
 
@@ -89,27 +72,22 @@ function buildParamsPanel(){
 
     const range = document.createElement("input");
     range.type = "range";
-    range.min = String(def.min);
-    range.max = String(def.max);
-    range.step = String(def.step);
+    range.min = def.min; range.max = def.max; range.step = def.step;
     range.dataset.k = def.key;
 
     const num = document.createElement("input");
     num.type = "number";
-    num.min = String(def.min);
-    num.max = String(def.max);
-    num.step = String(def.step);
+    num.min = def.min; num.max = def.max; num.step = def.step;
     num.dataset.k = def.key;
 
     const on = (e)=>{
       const k = e.target.dataset.k;
       const d = PARAMS.find(x=>x.key===k);
-      const v = clamp(parseFloat(e.target.value), d.min, d.max);
+      const v = clamp(e.target.value, d.min, d.max);
       liveParams[k] = v;
       panel.querySelectorAll(`[data-k="${k}"]`).forEach(el=>{ if(el!==e.target) el.value = String(v); });
       render();
     };
-
     range.addEventListener("input", on);
     num.addEventListener("input", on);
 
@@ -124,7 +102,7 @@ function syncUI(){
   const panel = $("paramsPanel");
   if(!panel) return;
   PARAMS.forEach(def=>{
-    const v = clamp(parseFloat(liveParams[def.key] ?? 0), def.min, def.max);
+    const v = clamp(liveParams[def.key] ?? 0, def.min, def.max);
     panel.querySelectorAll(`[data-k="${def.key}"]`).forEach(el=> el.value = String(v));
   });
 }
@@ -132,15 +110,16 @@ function syncUI(){
 async function loadProfiles(){
   try{
     const r = await fetch("gl_profiles.json", { cache:"no-store" });
-    if(!r.ok) throw new Error("HTTP " + r.status);
+    if(!r.ok) throw new Error("HTTP "+r.status);
     profiles = await r.json();
-
     const sel = $("presetSelect");
+    if(!sel) return;
+
     sel.innerHTML = "";
     const keys = Object.keys(profiles || {});
     if(!keys.length){
       const o = document.createElement("option");
-      o.value = ""; o.textContent = "Geen lenzen gevonden";
+      o.value=""; o.textContent="Geen lenzen gevonden";
       sel.appendChild(o);
       activeName = "";
       return;
@@ -150,7 +129,6 @@ async function loadProfiles(){
       o.value = k; o.textContent = k;
       sel.appendChild(o);
     });
-
     activeName = keys[0];
     sel.value = activeName;
     loadLens(activeName);
@@ -162,8 +140,8 @@ async function loadProfiles(){
 }
 
 function loadLens(name){
-  activeName = name;
-  liveParams = structuredClone(profiles[name] || {});
+  activeName = name || "";
+  liveParams = structuredClone(profiles[activeName] || {});
   ensureDefaults();
   syncUI();
   render();
@@ -179,12 +157,19 @@ function loadImageFile(file, cb){
   img.src = url;
 }
 
+function drawRef(){
+  if(!refCtx || !srcImg) return;
+  const img = refImg || srcImg;
+  refCtx.setTransform(1,0,0,1,0,0);
+  refCtx.clearRect(0,0,srcW,srcH);
+  refCtx.drawImage(img, 0, 0, srcW, srcH);
+}
+
 function onCleanFile(file){
   loadImageFile(file, (img)=>{
     srcImg = img;
     srcW = img.naturalWidth || img.width;
     srcH = img.naturalHeight || img.height;
-
     resizeCanvases(srcW, srcH);
 
     const es = $("emptyState");
@@ -192,7 +177,6 @@ function onCleanFile(file){
 
     setDimsText();
     setStatus("Clean loaded", true);
-
     drawRef();
     render();
   });
@@ -201,12 +185,33 @@ function onCleanFile(file){
 function onRefFile(file){
   loadImageFile(file, (img)=>{
     refImg = img;
-    if(srcImg){
-      drawRef();
-      render();
-    }
+    drawRef();
     setStatus("Reference loaded", true);
   });
+}
+
+function setSplit(on){
+  splitOn = !!on;
+  const vi = $("viewerInner");
+  if(vi) vi.classList.toggle("splitOn", splitOn);
+  setStatus(splitOn ? "Split ON" : "Split OFF", true);
+}
+
+function toggleSplit(){ setSplit(!splitOn); }
+
+function render(){
+  if(!srcImg) return;
+
+  if(!window.TVLGL || typeof TVLGL.render !== "function"){
+    setStatus("TVLGL ontbreekt — check gl.js (load/404)", false);
+    return;
+  }
+
+  const ok = TVLGL.render(srcImg, liveParams, canvas);
+  if(!ok){
+    setStatus("WebGL render failed — check console", false);
+    return;
+  }
 }
 
 function exportCanvas(filename, canvasEl){
@@ -222,127 +227,77 @@ function exportCanvas(filename, canvasEl){
   }, "image/png");
 }
 
-function safeName(s){
-  return (s||"lens").replace(/[^\w\-]+/g,"_").slice(0,64);
-}
+function safeName(s){ return (s||"lens").replace(/[^\w\-]+/g,"_").slice(0,64); }
 
 function exportSplit(){
   if(!srcImg) return;
-  // Ensure after is up to date
   render();
-  drawRef();
+  if(!refCanvas){
+    // fallback: just export AFTER
+    exportCanvas(`TVL_LensEmulator_${safeName(activeName)}.png`, canvas);
+    return;
+  }
 
   const tmp = document.createElement("canvas");
   tmp.width = srcW; tmp.height = srcH;
   const tctx = tmp.getContext("2d");
-
   const half = Math.floor(srcW/2);
 
-  // left: ref (or clean)
-  const left = refImg || srcImg;
-  tctx.drawImage(left, 0, 0, srcW, srcH);
+  // left = ref layer pixels
+  tctx.drawImage(refCanvas, 0, 0);
   const leftData = tctx.getImageData(0,0,half,srcH);
   tctx.clearRect(0,0,srcW,srcH);
   tctx.putImageData(leftData, 0, 0);
 
-  // right: WebGL canvas
+  // right = after
   tctx.drawImage(canvas, half, 0, srcW-half, srcH, half, 0, srcW-half, srcH);
 
   tctx.fillStyle = "rgba(255,255,255,0.85)";
   tctx.fillRect(half-2, 0, 4, srcH);
 
-  tctx.font = "800 22px ui-sans-serif, system-ui";
-  tctx.fillStyle = "rgba(255,255,255,0.92)";
-  tctx.fillText("REFERENCE", 24, 40);
-  tctx.fillText("AFTER", half + 24, 40);
-
   exportCanvas(`TVL_LensEmulator_SPLIT_${safeName(activeName)}.png`, tmp);
 }
 
-async function copyJSON(){
-  try{
-    await navigator.clipboard.writeText(JSON.stringify(liveParams, null, 2));
-    setStatus("JSON copied", true);
-  }catch(e){
-    console.warn(e);
-    setStatus("Clipboard blocked", false);
-  }
-}
-
-// Split / Fullscreen
-function setSplit(on){
-  splitOn = !!on;
-  const vi = $("viewerInner");
-  if(vi) vi.classList.toggle("splitOn", splitOn);
-  setStatus(splitOn ? "Split ON" : "Split OFF", true);
-}
-function toggleSplit(){ setSplit(!splitOn); }
-
-function getFullscreenTarget(){
-  return document.querySelector(".viewerInner") || document.querySelector(".viewer") || canvas;
-}
 function toggleFullscreen(){
-  const el = getFullscreenTarget();
-  if(!el) return;
+  const el = document.querySelector(".viewerInner") || document.querySelector(".viewer") || canvas;
   if(!document.fullscreenElement) el.requestFullscreen?.();
   else document.exitFullscreen?.();
 }
 
-function render(){
-  if(!srcImg) return;
-  // keep ref updated
-  drawRef();
-
-  if(!window.TVLGL || typeof TVLGL.render !== "function"){
-    setStatus("TVLGL ontbreekt — check gl.js load", false);
-    return;
-  }
-
-  const ok = TVLGL.render(srcImg, liveParams, canvas);
-  if(!ok){
-    setStatus("WebGL render failed (check console)", false);
-    return;
-  }
-}
-
-// Boot
 function boot(){
   buildParamsPanel();
   loadProfiles();
 
   safeOn("fileInput", "change", (e)=> onCleanFile(e.target.files?.[0]));
   safeOn("refInput", "change", (e)=> onRefFile(e.target.files?.[0]));
-
-  safeOn("useCleanAsRef", "click", ()=>{
-    if(!srcImg) return;
-    refImg = null;
-    drawRef();
-    setStatus("Reference = clean", true);
-  });
-
-  safeOn("clearRef", "click", ()=>{
-    refImg = null;
-    if(srcImg) drawRef();
-    setStatus("Reference cleared", true);
-  });
-
   safeOn("presetSelect", "change", (e)=> loadLens(e.target.value));
-  safeOn("resetParams", "click", ()=> loadLens(activeName));
-  safeOn("copyParams", "click", copyJSON);
+
+  safeOn("splitBtn", "click", toggleSplit);
+  safeOn("fullscreenBtn", "click", toggleFullscreen);
 
   safeOn("exportPng", "click", ()=>{
     if(!srcImg) return;
     render();
     exportCanvas(`TVL_LensEmulator_${safeName(activeName)}.png`, canvas);
   });
-
   safeOn("exportSplit", "click", exportSplit);
-  safeOn("splitBtn", "click", toggleSplit);
-  safeOn("fullscreenBtn", "click", toggleFullscreen);
+
+  safeOn("useCleanAsRef", "click", ()=>{ refImg=null; drawRef(); setStatus("Reference = clean", true); });
+  safeOn("clearRef", "click", ()=>{ refImg=null; drawRef(); setStatus("Reference cleared", true); });
+
+  safeOn("resetParams", "click", ()=> loadLens(activeName));
+  safeOn("copyParams", "click", async ()=>{
+    try{
+      await navigator.clipboard.writeText(JSON.stringify(liveParams, null, 2));
+      setStatus("JSON copied", true);
+    }catch(e){
+      setStatus("Clipboard blocked", false);
+    }
+  });
 
   window.addEventListener("keydown", (e)=>{
-    if(e.key === "s" || e.key === "S"){ e.preventDefault(); toggleSplit(); }
-    if(e.key === "p" || e.key === "P"){ e.preventDefault(); toggleFullscreen(); }
+    if(e.key==="s"||e.key==="S"){ e.preventDefault(); toggleSplit(); }
+    if(e.key==="p"||e.key==="P"){ e.preventDefault(); toggleFullscreen(); }
   });
 
   setStatus("Ready", true);
