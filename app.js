@@ -1,23 +1,23 @@
 /* TVL Lens Emulator — NO SLIDERS
    - Upload image
    - Choose lens profile (gl_profiles.json)
-   - Render via gl.js (TVLGL)
+   - Render via WebGL (gl.js / TVLGL)
    - Export PNG + split
 */
 
 const $ = (id) => document.getElementById(id);
 function safeOn(id, evt, fn){ const el = $(id); if(el) el.addEventListener(evt, fn); }
 
-const canvas = $("canvas");              // id="canvas"
-const ctx = canvas.getContext("2d", { willReadFrequently: true });
+const canvas = $("canvas"); // id="canvas"
+const ctx2d = canvas.getContext("2d", { willReadFrequently: true });
 
 let srcImg = null;
 let srcW = 0, srcH = 0;
 
 let profiles = {};
 let activeName = "";
-let flareSeed = Math.floor(Math.random() * 1e9);
 
+// ---------- UI helpers ----------
 function setStatus(text, good=false){
   const pill = $("infoPill");
   if(!pill) return;
@@ -27,30 +27,29 @@ function setStatus(text, good=false){
 
 function setDimsText(){
   const el = $("dimPill");
-  if(!el) return;
-  el.textContent = srcImg ? `${srcW}×${srcH}` : "—";
+  if(el) el.textContent = srcImg ? `${srcW}×${srcH}` : "—";
 }
 
 function resizeCanvas(w,h){
-  canvas.width = w; canvas.height = h;
+  canvas.width = w;
+  canvas.height = h;
 }
 
-function drawBefore(){
-  if(!srcImg) return;
-  ctx.setTransform(1,0,0,1,0,0);
-  ctx.clearRect(0,0,srcW,srcH);
-  ctx.drawImage(srcImg,0,0);
-}
-
-async function loadProfiles(){
-  try{
-    const r = await fetch("gl_profiles.json", { cache: "no-store" });
-    profiles = await r.json();
-  } catch(e){
-    profiles = {};
-    setStatus("Kon gl_profiles.json niet laden.", false);
-  }
-  populateSelect();
+// ---------- load profiles ----------
+function loadProfiles(){
+  return fetch("gl_profiles.json")
+    .then(r => r.json())
+    .then(j => {
+      profiles = j || {};
+      populateSelect();
+      setStatus("Profiles loaded", true);
+    })
+    .catch((e) => {
+      console.error(e);
+      profiles = {};
+      populateSelect();
+      setStatus("Kon gl_profiles.json niet laden", false);
+    });
 }
 
 function populateSelect(){
@@ -58,7 +57,7 @@ function populateSelect(){
   if(!sel) return;
   sel.innerHTML = "";
 
-  const keys = Object.keys(profiles || {});
+  const keys = Object.keys(profiles);
   if(keys.length === 0){
     const opt = document.createElement("option");
     opt.value = "";
@@ -68,7 +67,7 @@ function populateSelect(){
     return;
   }
 
-  keys.forEach(k => {
+  keys.forEach(k=>{
     const opt = document.createElement("option");
     opt.value = k;
     opt.textContent = k;
@@ -77,66 +76,71 @@ function populateSelect(){
 
   activeName = keys[0];
   sel.value = activeName;
-  render();
 }
 
+// ---------- file upload ----------
 function onFile(file){
   if(!file) return;
-
   const url = URL.createObjectURL(file);
   const img = new Image();
+
   img.onload = () => {
     srcImg = img;
     srcW = img.naturalWidth;
     srcH = img.naturalHeight;
 
     resizeCanvas(srcW, srcH);
+
     const es = $("emptyState");
     if(es) es.style.display = "none";
 
     setDimsText();
     setStatus("Loaded", true);
-    render();
 
+    render();
     URL.revokeObjectURL(url);
   };
-  img.onerror = () => setStatus("Kon afbeelding niet laden.", false);
+
+  img.onerror = () => {
+    setStatus("Kon afbeelding niet laden", false);
+  };
+
   img.src = url;
 }
 
-function currentParams(){
-  const p = profiles[activeName] || {};
-  // flareSeed meegeven kan later als je gl.js ‘m gebruikt
-  return { ...p, _seed: flareSeed };
+// ---------- rendering ----------
+function drawBefore(){
+  ctx2d.setTransform(1,0,0,1,0,0);
+  ctx2d.clearRect(0,0,srcW,srcH);
+  ctx2d.drawImage(srcImg, 0, 0);
+  setStatus("Before", true);
 }
 
 function render(){
   if(!srcImg) return;
 
-  // before toggle
-  const showBefore = $("showBefore")?.checked;
-  if(showBefore){
+  if($("showBefore")?.checked){
     drawBefore();
-    setStatus("Before", true);
     return;
   }
 
-  // WebGL path
-  if(window.TVLGL && typeof window.TVLGL.render === "function"){
-    try{
-      window.TVLGL.render(srcImg, currentParams(), canvas);
+  const prof = profiles[activeName] || {};
+
+  // WebGL render -> writes into the SAME canvas
+  if(window.TVLGL && TVLGL.render){
+    const ok = TVLGL.render(srcImg, prof, canvas);
+    if(ok){
       setStatus(`Lens: ${activeName}`, true);
       return;
-    } catch(e){
-      // fallthrough
     }
   }
 
-  // Fallback: show original
+  // fallback: show original if WebGL failed
   drawBefore();
-  setStatus("WebGL niet beschikbaar → toon origineel.", false);
+  setStatus("WebGL niet beschikbaar → toon originele", false);
 }
 
+// ---------- exports ----------
 function exportCanvas(filename, canvasEl){
   canvasEl.toBlob((blob) => {
     if(!blob) return;
@@ -157,22 +161,17 @@ function safeName(s){
 function exportSplit(){
   if(!srcImg) return;
 
-  // snapshot current canvas as "after"
-  const after = document.createElement("canvas");
-  after.width = srcW; after.height = srcH;
-  after.getContext("2d").drawImage(canvas,0,0);
-
-  // build split
   const tmp = document.createElement("canvas");
-  tmp.width = srcW; tmp.height = srcH;
+  tmp.width = srcW;
+  tmp.height = srcH;
   const tctx = tmp.getContext("2d");
 
   // left = before
-  tctx.drawImage(srcImg,0,0);
+  tctx.drawImage(srcImg, 0, 0);
 
-  // right half = after
+  // right = after (current canvas)
   const half = Math.floor(srcW/2);
-  tctx.drawImage(after, half, 0, srcW-half, srcH, half, 0, srcW-half, srcH);
+  tctx.drawImage(canvas, half, 0, srcW-half, srcH, half, 0, srcW-half, srcH);
 
   // divider
   tctx.fillStyle = "rgba(255,255,255,0.8)";
@@ -187,25 +186,21 @@ function exportSplit(){
   exportCanvas(`TVL_LensEmulator_SPLIT_${safeName(activeName)}.png`, tmp);
 }
 
+// ---------- bind ----------
 function bind(){
   safeOn("fileInput","change",(e)=> onFile(e.target.files && e.target.files[0]));
-  safeOn("presetSelect","change",(e)=>{ activeName = e.target.value; render(); });
+  safeOn("presetSelect","change",(e)=> { activeName = e.target.value; render(); });
+  safeOn("showBefore","change", render);
 
-  safeOn("randomizeFlare","click", ()=>{
-    flareSeed = Math.floor(Math.random()*1e9);
-    render();
-  });
+  // Button exists in UI; we just re-render (flare randomness zit nog niet in gl.js)
+  safeOn("randomizeFlare","click", render);
 
   safeOn("exportPng","click", ()=>{
     if(!srcImg) return;
     exportCanvas(`TVL_LensEmulator_${safeName(activeName)}.png`, canvas);
   });
 
-  safeOn("exportSplit","click", ()=> exportSplit());
-
-  // toggles rerender
-  safeOn("showBefore","change", render);
-  safeOn("autoFit","change", render); // zit er wel in je UI; functioneel doet ’t nu niks, maar harmless.
+  safeOn("exportSplit","click", exportSplit);
 }
 
 loadProfiles().then(bind);
