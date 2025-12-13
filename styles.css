@@ -151,39 +151,22 @@ canvas{
   .panel{order:2}
   .viewer{order:1; min-height: 55vh}
 }
-.detail{
+/* Detail viewer overlay (klein, volgt muis, standaard UIT) */
+#detailOverlay{
   position:fixed;
-  inset:0;
-  background:rgba(0,0,0,.92);
-  display:flex;
-  gap:20px;
-  justify-content:center;
-  align-items:center;
-  z-index:9999;
-}
-.detail.hidden{display:none}
-
-.detail canvas{
-  width:320px;
-  height:320px;
-  background:#000;
-  border-radius:12px;
-}
-.hidden{ display:none !important; }
-
-.detail{
-  position:absolute;
+  left:0;
+  top:0;
+  display:none;          /* app.js zet dit aan/uit */
   pointer-events:none;
-  z-index:50;
-  display:flex;
+  z-index:9999;
   gap:12px;
 }
 
-.detail canvas{
-  width:260px;
-  height:260px;
+#detailOverlay canvas{
+  width:320px;
+  height:320px;
   background:#000;
-  border-radius:12px;
+  border-radius:14px;
   border:1px solid rgba(255,255,255,.15);
   box-shadow:0 12px 40px rgba(0,0,0,.45);
 }
