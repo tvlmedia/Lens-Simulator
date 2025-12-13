@@ -1,0 +1,158 @@
+:root{
+  --bg:#0b0c10;
+  --panel:#11131a;
+  --panel2:#0f1117;
+  --text:#e7eaf0;
+  --muted:#a9b0c0;
+  --line:#1d2230;
+  --btn:#1f6feb;
+  --btn2:#182034;
+  --good:#2ecc71;
+}
+
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;
+  background:radial-gradient(1200px 700px at 20% -10%, #141a2a 0%, var(--bg) 55%);
+  color:var(--text);
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+}
+
+.topbar{
+  position:sticky; top:0;
+  display:flex; align-items:center; justify-content:space-between;
+  padding:14px 18px;
+  background:rgba(10,12,18,.85);
+  border-bottom:1px solid var(--line);
+  backdrop-filter: blur(10px);
+  z-index:10;
+}
+.brand{display:flex; gap:12px; align-items:center}
+.dot{width:10px;height:10px;border-radius:999px;background:var(--btn); box-shadow:0 0 18px rgba(31,111,235,.8)}
+.title{font-weight:800; letter-spacing:.2px}
+.subtitle{color:var(--muted); font-size:12px; margin-top:1px}
+
+.actions{display:flex; gap:10px; align-items:center}
+.btn{
+  border:1px solid rgba(255,255,255,.08);
+  background:var(--btn);
+  color:white;
+  padding:9px 12px;
+  border-radius:12px;
+  cursor:pointer;
+  font-weight:700;
+  transition: transform .06s ease, filter .15s ease;
+}
+.btn:hover{filter:brightness(1.06)}
+.btn:active{transform:translateY(1px)}
+.btn.ghost{
+  background:var(--btn2);
+  color:var(--text);
+}
+a.btn{display:inline-flex; text-decoration:none}
+
+.wrap{
+  display:grid;
+  grid-template-columns: 420px 1fr;
+  gap:16px;
+  padding:16px;
+  max-width: 1400px;
+  margin:0 auto;
+}
+
+.panel{
+  background:linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.02));
+  border:1px solid var(--line);
+  border-radius:18px;
+  padding:14px;
+  box-shadow: 0 10px 40px rgba(0,0,0,.25);
+}
+
+.block{padding:10px 6px 14px}
+.label{display:block; font-weight:800; margin-bottom:8px}
+.hint{color:var(--muted); font-size:12px; margin-top:8px}
+.hint.small{font-size:11px; line-height:1.35}
+
+.row{display:flex; gap:10px; align-items:center}
+select, input[type="file"]{
+  width:100%;
+  background:rgba(255,255,255,.03);
+  border:1px solid rgba(255,255,255,.08);
+  color:var(--text);
+  padding:10px 12px;
+  border-radius:12px;
+  outline:none;
+}
+
+.grid2{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:10px}
+.ctrl{
+  background:rgba(0,0,0,.16);
+  border:1px solid rgba(255,255,255,.06);
+  border-radius:14px;
+  padding:10px 10px 12px;
+}
+.ctrlhead{display:flex; justify-content:space-between; align-items:center; font-weight:800; font-size:13px}
+.val{color:var(--muted); font-weight:700}
+input[type="range"]{width:100%}
+
+.toggles{margin-top:10px; justify-content:space-between}
+.toggle{display:flex; gap:8px; align-items:center; color:var(--muted); font-weight:700; font-size:12px}
+
+.viewer{
+  background:linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.01));
+  border:1px solid var(--line);
+  border-radius:18px;
+  padding:14px;
+  box-shadow: 0 10px 40px rgba(0,0,0,.25);
+  display:flex;
+  flex-direction:column;
+  min-height: 70vh;
+}
+.viewerInner{
+  position:relative;
+  flex:1;
+  background:#000;
+  border-radius:14px;
+  overflow:hidden;
+  border:1px solid rgba(255,255,255,.06);
+}
+canvas{
+  width:100%;
+  height:100%;
+  display:block;
+  image-rendering:auto;
+}
+.empty{
+  position:absolute; inset:0;
+  display:flex; align-items:center; justify-content:center;
+  background: radial-gradient(700px 400px at 50% 20%, rgba(31,111,235,.20), transparent 60%);
+}
+.emptyBox{
+  border:1px dashed rgba(255,255,255,.15);
+  border-radius:16px;
+  padding:18px 18px;
+  background:rgba(0,0,0,.35);
+  text-align:center;
+  max-width: 420px;
+}
+.emptyTitle{font-weight:900; font-size:16px}
+.emptyText{color:var(--muted); margin-top:6px; font-size:12px; line-height:1.35}
+
+.foot{display:flex; justify-content:space-between; margin-top:10px}
+.pill{
+  background:rgba(255,255,255,.04);
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:999px;
+  padding:8px 10px;
+  color:var(--muted);
+  font-weight:800;
+  font-size:12px;
+}
+.mono{font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace}
+
+@media (max-width: 1050px){
+  .wrap{grid-template-columns:1fr; }
+  .panel{order:2}
+  .viewer{order:1; min-height: 55vh}
+}

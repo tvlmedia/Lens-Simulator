@@ -1,0 +1,32 @@
+{
+  "Helios 44-2 (emulation)": {
+    "contrast": 1.03,
+    "saturation": 1.02,
+    "warmth": 0.08,
+    "vignette": 0.22,
+    "halation": 0.38,
+    "ca": 0.18,
+    "flare": 0.55,
+    "swirl": 0.7
+  },
+  "Zeiss Jena (vintage subtiel)": {
+    "contrast": 1.02,
+    "saturation": 0.99,
+    "warmth": 0.03,
+    "vignette": 0.16,
+    "halation": 0.22,
+    "ca": 0.1,
+    "flare": 0.32,
+    "swirl": 0.22
+  },
+  "Cooke-ish (warm, clean rolloff)": {
+    "contrast": 1.01,
+    "saturation": 1.05,
+    "warmth": 0.1,
+    "vignette": 0.1,
+    "halation": 0.28,
+    "ca": 0.06,
+    "flare": 0.2,
+    "swirl": 0.1
+  }
+}

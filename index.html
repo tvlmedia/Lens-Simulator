@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>TVL Lens Emulator (MVP)</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="dot"></div>
+      <div>
+        <div class="title">TVL Lens Emulator</div>
+        <div class="subtitle">Upload clean → kies lens → export</div>
+      </div>
+    </div>
+    <div class="actions">
+      <a class="btn ghost" href="https://tvlrental.nl" target="_blank" rel="noreferrer">tvlrental.nl</a>
+      <button id="exportPng" class="btn">Export PNG</button>
+      <button id="exportSplit" class="btn">Export Split</button>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="panel">
+      <div class="block">
+        <label class="label">1) Upload afbeelding (clean)</label>
+        <input id="fileInput" type="file" accept="image/*" />
+        <div class="hint">Tip: shots met highlights & bokeh geven het meest “lens”-gevoel.</div>
+      </div>
+
+      <div class="block">
+        <label class="label">2) Kies lenzenset</label>
+        <div class="row">
+          <select id="presetSelect"></select>
+          <button id="randomizeFlare" class="btn ghost">Random flare</button>
+        </div>
+      </div>
+
+      <div class="block">
+        <label class="label">3) Sterkte</label>
+        <div class="grid2">
+          <div class="ctrl">
+            <div class="ctrlhead"><span>Strength</span><span id="v_strength" class="val"></span></div>
+            <input id="strength" type="range" min="0" max="200" value="100" />
+          </div>
+          <div class="ctrl">
+            <div class="ctrlhead"><span>Swirl</span><span id="v_swirl" class="val"></span></div>
+            <input id="swirl" type="range" min="0" max="200" value="100" />
+          </div>
+
+          <div class="ctrl">
+            <div class="ctrlhead"><span>Halation</span><span id="v_halation" class="val"></span></div>
+            <input id="halation" type="range" min="0" max="200" value="100" />
+          </div>
+          <div class="ctrl">
+            <div class="ctrlhead"><span>Vignette</span><span id="v_vignette" class="val"></span></div>
+            <input id="vignette" type="range" min="0" max="200" value="100" />
+          </div>
+
+          <div class="ctrl">
+            <div class="ctrlhead"><span>CA</span><span id="v_ca" class="val"></span></div>
+            <input id="ca" type="range" min="0" max="200" value="100" />
+          </div>
+          <div class="ctrl">
+            <div class="ctrlhead"><span>Flare</span><span id="v_flare" class="val"></span></div>
+            <input id="flare" type="range" min="0" max="200" value="100" />
+          </div>
+        </div>
+
+        <div class="grid2">
+          <div class="ctrl">
+            <div class="ctrlhead"><span>Contrast</span><span id="v_contrast" class="val"></span></div>
+            <input id="contrast" type="range" min="50" max="150" value="103" />
+          </div>
+          <div class="ctrl">
+            <div class="ctrlhead"><span>Saturation</span><span id="v_saturation" class="val"></span></div>
+            <input id="saturation" type="range" min="50" max="150" value="100" />
+          </div>
+        </div>
+
+        <div class="row toggles">
+          <label class="toggle">
+            <input id="showBefore" type="checkbox" />
+            <span>Toon “before”</span>
+          </label>
+          <label class="toggle">
+            <input id="autoFit" type="checkbox" checked />
+            <span>Auto-fit viewer</span>
+          </label>
+        </div>
+
+        <div class="hint small">
+          Dit is een MVP (client-side). “Perfect Helios” in 100% van de shots bestaat niet zonder lens-data/model,
+          maar dit komt vaak al verrassend dichtbij.
+        </div>
+      </div>
+    </section>
+
+    <section class="viewer">
+      <div class="viewerInner">
+        <canvas id="canvas"></canvas>
+        <div id="emptyState" class="empty">
+          <div class="emptyBox">
+            <div class="emptyTitle">Upload een afbeelding</div>
+            <div class="emptyText">Daarna kies je een preset en export je een PNG.</div>
+          </div>
+        </div>
+      </div>
+      <div class="foot">
+        <div class="pill" id="infoPill">Ready</div>
+        <div class="pill mono" id="dimPill">—</div>
+      </div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
