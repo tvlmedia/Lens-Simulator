@@ -172,21 +172,20 @@ canvas{
 .hidden{ display:none !important; }
 
 .detail{
-  position:fixed;
-  inset:0;
-  z-index:9999;
+  position:absolute;
+  pointer-events:none;
+  z-index:50;
   display:flex;
-  gap:18px;
-  align-items:center;
-  justify-content:center;
-  padding:24px;
-  background:rgba(0,0,0,.92);
+  gap:12px;
 }
 
 .detail canvas{
-  width:360px;
-  height:360px;
+  width:260px;
+  height:260px;
   background:#000;
-  border:1px solid rgba(255,255,255,.12);
-  border-radius:14px;
+  border-radius:12px;
+  border:1px solid rgba(255,255,255,.15);
+  box-shadow:0 12px 40px rgba(0,0,0,.45);
 }
+
+.hidden{ display:none; }
