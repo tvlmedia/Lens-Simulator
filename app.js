@@ -254,17 +254,14 @@ function ensureDetailOverlay(){
   if(detail.overlay) return;
 
   // overlay container
-  const ov = document.createElement("div");
+    const ov = document.createElement("div");
   ov.id = "detailOverlay";
   ov.style.position = "fixed";
-  ov.style.inset = "0";
+  ov.style.left = "0px";
+  ov.style.top  = "0px";
   ov.style.display = "none";
-  ov.style.alignItems = "center";
-  ov.style.justifyContent = "center";
-  ov.style.gap = "18px";
-  ov.style.background = "rgba(0,0,0,0.92)";
+  ov.style.pointerEvents = "none";
   ov.style.zIndex = "9999";
-  ov.style.padding = "24px";
 
   // help text
   const help = document.createElement("div");
