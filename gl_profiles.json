@@ -11,18 +11,19 @@
     "asymX": 0.0,
     "asymY": 0.0
   },
-  "IronGlass Soviet MKII (50mm T2.8)": {
-    "fieldCurvature": 0.55,
-    "edgeSoftness": 0.65,
-    "coma": 0.42,
-    "comaAnamorph": 0.55,
-    "bloom": 0.38,
-    "bloomWarmth": 0.22,
-    "ca": 0.18,
-    "vignette": 0.22,
-    "asymX": 0.03,
-    "asymY": -0.02
-  },
+ "IronGlass Soviet MKII (50mm T2.8)": {
+  "fieldCurvature": 0.85,
+  "edgeSoftness": 0.95,
+  "coma": 0.95,
+  "comaAnamorph": 0.65,
+  "bloom": 0.55,
+  "bloomWarmth": 0.30,
+  "ca": 0.35,
+  "vignette": 0.55,
+  "asymX": 0.20,
+  "asymY": -0.12,
+  "veiling": 0.40
+}
   "TEST": {
     "fieldCurvature": 1.2,
     "edgeSoftness": 1.0,
