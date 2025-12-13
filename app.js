@@ -28,17 +28,17 @@ let splitOn = false;
 
 // ---------- param definitions ----------
 const PARAMS = [
-  { key:"fieldCurvature", label:"Field curvature", min:0,   max:1.2, step:0.01 },
-  { key:"edgeSoftness",   label:"Edge softness",   min:0,   max:1.0, step:0.01 },
-  { key:"coma",           label:"Coma",           min:0,   max:1.0, step:0.01 },
-  { key:"comaAnamorph",   label:"Coma anamorph",  min:0,   max:1.0, step:0.01 },
-  { key:"bloom",          label:"Bloom",          min:0,   max:1.0, step:0.01 },
-  { key:"bloomWarmth",    label:"Bloom warmth",   min:-1,  max:1.0, step:0.01 },
-  { key:"ca",             label:"CA",             min:0,   max:1.0, step:0.01 },
-  { key:"vignette",       label:"Vignette",       min:0,   max:1.2, step:0.01 },
-  { key:"asymX",          label:"Asym X",         min:-1,  max:1.0, step:0.01 },
-  { key:"asymY",          label:"Asym Y",         min:-1,  max:1.0, step:0.01 },
-  { key:"veil",           label:"Veil",           min:0,   max:1.0, step:0.01 },
+  { key:"fieldCurvature", label:"Field curvature", min:-3,   max:3.0, step:0.01 },
+  { key:"edgeSoftness",   label:"Edge softness",   min:-3,   max:3.0, step:0.01 },
+  { key:"coma",           label:"Coma",           min:-3,   max:3.0, step:0.01 },
+  { key:"comaAnamorph",   label:"Coma anamorph",  min:-3,   max:3.0, step:0.01 },
+  { key:"bloom",          label:"Bloom",          min:-3,   max:3.0, step:0.01 },
+  { key:"bloomWarmth",    label:"Bloom warmth",   min:-3,  max:3.0, step:0.01 },
+  { key:"ca",             label:"CA",             min:-3,   max:3.0, step:0.01 },
+  { key:"vignette",       label:"Vignette",       min:-3,   max:3.0, step:0.01 },
+  { key:"asymX",          label:"Asym X",         min:-3,  max:3.0, step:0.01 },
+  { key:"asymY",          label:"Asym Y",         min:-3,  max:3.0, step:0.01 },
+  { key:"veil",           label:"Veil",           min:-3,   max:3.0, step:0.01 },
 ];
 
 // ---------- UI helpers ----------
