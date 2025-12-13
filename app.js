@@ -6,6 +6,8 @@
 */
 
 const $ = (id) => document.getElementById(id);
+const has = (id)=> !!$(id);
+const setIf = (id, prop, val)=>{ const el=$(id); if(!el) return; el[prop]=val; };
 
 const canvas = $("canvas");
 const ctx = canvas.getContext("2d", { willReadFrequently: true });
@@ -18,6 +20,8 @@ const bCtx = offB.getContext("2d", { willReadFrequently: true });
 let srcImg = null;
 let srcW = 0, srcH = 0;
 let presets = {};
+let glProfiles = {};
+
 let activePresetName = "";
 let flareSeed = Math.random() * 9999;
 
@@ -46,7 +50,9 @@ function sliderValue(id){
 }
 
 function strength01(){
-  return sliderValue("strength") / 100; // 0..2
+  // Public version: fixed strength when there is no slider.
+  if(!has("strength")) return 1.0;
+  return sliderValue("strength") / 100;
 }
 
 function presetWithStrength(base, slider){
@@ -82,34 +88,36 @@ function fitCanvasToViewer(){
   // Optional downscale could be added later.
 }
 
-
 function loadPresets(){
-  // Try both locations (works on GitHub Pages regardless of folder layout)
-  const tries = ["presets/presets.json", "presets.json"];
-  return tries.reduce((p, url) => p.catch(() => fetch(url).then(r => {
-      if(!r.ok) throw new Error("HTTP "+r.status);
-      return r.json();
-    }).then(j => { presets = j; populatePresets(); setStatus("Presets geladen.", true); })
-  ), Promise.reject())
-  .catch((e)=>{
-    console.warn("Presets load failed:", e);
-    presets = {};
-    populatePresets();
-    setStatus("Kon presets niet laden (presets.json).", false);
-  });
+  // Try both locations so GitHub Pages works whether you use /presets/ folder or repo root.
+  const candidates = ["presets/presets.json", "presets.json"];
+  return fetchAnyJson(candidates)
+    .then(j => { presets = j || {}; populatePresets(); })
+    .catch(() => {
+      presets = {};
+      populatePresets();
+      setStatus("Kon presets niet laden (presets.json).", false);
+    })
+    .then(() => loadGLProfiles()); // best-effort
 }
 
-let glProfiles = {};
-function loadGlProfiles(){
-  const tries = ["presets/gl_profiles.json", "gl_profiles.json"];
-  return tries.reduce((p, url) => p.catch(() => fetch(url).then(r => {
-      if(!r.ok) throw new Error("HTTP "+r.status);
+function fetchAnyJson(urls){
+  let lastErr = null;
+  return urls.reduce((p, url) => p.catch(err => {
+    lastErr = err;
+    return fetch(url).then(r => {
+      if(!r.ok) throw new Error("HTTP " + r.status + " for " + url);
       return r.json();
-    }).then(j => { glProfiles = j || {}; })
-  ), Promise.reject())
-  .catch(()=>{ glProfiles = {}; });
+    });
+  }), Promise.reject()).catch(() => { throw lastErr || new Error("fetchAnyJson failed"); });
 }
 
+function loadGLProfiles(){
+  const urls = ["presets/gl_profiles.json", "gl_profiles.json"];
+  return fetchAnyJson(urls)
+    .then(j => { glProfiles = j || {}; })
+    .catch(() => { glProfiles = {}; });
+}
 
 function populatePresets(){
   const sel = $("presetSelect");
@@ -133,26 +141,27 @@ function populatePresets(){
   applyPresetToUI(activePresetName);
 }
 
-
 function applyPresetToUI(name){
   activePresetName = name;
+  const p = presets[name];
+  // set default slider baselines to 100, but tweak contrast/sat based on preset
+  setIf("contrast","value", Math.round((p.contrast ?? 1.0) * 100));
+  setIf("saturation","value", Math.round((p.saturation ?? 1.0) * 100));
 
-  // No sliders in public UI: preset determines everything.
-  // We still keep internal multipliers at 100 via sliderValue() fallback.
+  setIf("vignette","value", 100);
+  setIf("halation","value", 100);
+  setIf("ca","value", 100);
+  setIf("flare","value", 100);
+  setIf("swirl","value", 100);
+  setIf("strength","value", 100);
+
   updateUIReadouts();
   render();
 }
 
-
 function updateUIReadouts(){
-  uiVal("strength", (sliderValue("strength")/100).toFixed(2));
-  uiVal("swirl", (sliderValue("swirl")/100).toFixed(2));
-  uiVal("halation", (sliderValue("halation")/100).toFixed(2));
-  uiVal("vignette", (sliderValue("vignette")/100).toFixed(2));
-  uiVal("ca", (sliderValue("ca")/100).toFixed(2));
-  uiVal("flare", (sliderValue("flare")/100).toFixed(2));
-  uiVal("contrast", (sliderValue("contrast")/100).toFixed(2));
-  uiVal("saturation", (sliderValue("saturation")/100).toFixed(2));
+  // Public version: no sliders. Keep only dimensions text.
+  setDimsText();
 }
 
 function onFile(file){
@@ -448,6 +457,19 @@ function mulberry32(a){
 function render(){
   if(!srcImg) return;
 
+  // If WebGL lens sim is available, run it first using gl_profiles.json (optional).
+  try{
+    if(window.TVLGL && typeof window.TVLGL.render === "function"){
+      const prof = glProfiles?.[activePresetName];
+      if(prof){
+        window.TVLGL.render(srcImg, canvas, prof);
+        // After GL pass, we can still apply subtle grading/overlays in the CPU pipeline below if needed.
+      }
+    }
+  }catch(e){
+    // fall back silently to CPU pipeline
+  }
+
   const preset = presets[activePresetName] || {};
   const mulVignette = sliderValue("vignette")/100;
   const mulHalation = sliderValue("halation")/100;
@@ -573,38 +595,20 @@ function safeName(s){
   return (s||"preset").replace(/[^\w\-]+/g,"_").slice(0,64);
 }
 
-
 function bind(){
-  const fi = $("fileInput");
-  if(fi) fi.addEventListener("change", (e)=> onFile(e.target.files[0]));
+  if(has("fileInput")) $("fileInput").addEventListener("change", (e)=> onFile(e.target.files[0]));
 
-  const ps = $("presetSelect");
-  if(ps) ps.addEventListener("change", (e)=> applyPresetToUI(e.target.value));
+  if(has("presetSelect")) $("presetSelect").addEventListener("change", (e)=> applyPresetToUI(e.target.value));
 
-  // No sliders in public UI. Only rerender on toggles (if present).
-  const rerenderIds = ["showBefore","autoFit"];
-  rerenderIds.forEach(id => {
-    const el = $(id);
-    if(!el) return;
-    el.addEventListener("input", ()=>{ updateUIReadouts(); render(); });
-    el.addEventListener("change", ()=>{ updateUIReadouts(); render(); });
-  });
+  if(has("showBefore")) $("showBefore").addEventListener("change", ()=> render());
 
-  const rf = $("randomizeFlare");
-  if(rf) rf.addEventListener("click", ()=>{
-    flareSeed = Math.floor(Math.random()*1e9);
-    render();
-  });
+  if(has("randomizeFlare")) $("randomizeFlare").addEventListener("click", ()=>{ flareSeed = Math.floor(Math.random()*1e9); render(); });
 
-  const ep = $("exportPng");
-  if(ep) ep.addEventListener("click", ()=>{
-    if(!srcImg) return;
-    exportCanvas(`TVL_LensEmulator_${safeName(activePresetName || "Preset")}.png`, canvas);
-  });
+  if(has("exportPng")) $("exportPng").addEventListener("click", ()=>{ if(!srcImg) return; exportCanvas(`TVL_LensEmulator_${safeName(activePresetName)}.png`, canvas); });
 
-  const es = $("exportSplit");
-  if(es) es.addEventListener("click", ()=> exportSplit());
+  if(has("exportSplit")) $("exportSplit").addEventListener("click", ()=> exportSplit());
 
   updateUIReadouts();
 }
-Promise.all([loadPresets(), loadGlProfiles()]).then(bind);
+
+loadPresets().then(bind);
