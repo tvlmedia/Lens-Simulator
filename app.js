@@ -41,7 +41,8 @@ function uiVal(id, text){
 
 function sliderValue(id){
   const el = $(id);
-  return el ? Number(el.value) : 100;
+  if(!el) return 100;
+  return Number(el.value);
 }
 
 function strength01(){
@@ -81,16 +82,34 @@ function fitCanvasToViewer(){
   // Optional downscale could be added later.
 }
 
+
 function loadPresets(){
-  return fetch("presets/presets.json").catch(()=>fetch("presets.json"))
-    .then(r => r.json())
-    .then(j => { presets = j; populatePresets(); })
-    .catch(() => {
-      presets = {};
-      populatePresets();
-      setStatus("Kon presets niet laden (presets.json).", false);
-    });
+  // Try both locations (works on GitHub Pages regardless of folder layout)
+  const tries = ["presets/presets.json", "presets.json"];
+  return tries.reduce((p, url) => p.catch(() => fetch(url).then(r => {
+      if(!r.ok) throw new Error("HTTP "+r.status);
+      return r.json();
+    }).then(j => { presets = j; populatePresets(); setStatus("Presets geladen.", true); })
+  ), Promise.reject())
+  .catch((e)=>{
+    console.warn("Presets load failed:", e);
+    presets = {};
+    populatePresets();
+    setStatus("Kon presets niet laden (presets.json).", false);
+  });
 }
+
+let glProfiles = {};
+function loadGlProfiles(){
+  const tries = ["presets/gl_profiles.json", "gl_profiles.json"];
+  return tries.reduce((p, url) => p.catch(() => fetch(url).then(r => {
+      if(!r.ok) throw new Error("HTTP "+r.status);
+      return r.json();
+    }).then(j => { glProfiles = j || {}; })
+  ), Promise.reject())
+  .catch(()=>{ glProfiles = {}; });
+}
+
 
 function populatePresets(){
   const sel = $("presetSelect");
@@ -114,13 +133,27 @@ function populatePresets(){
   applyPresetToUI(activePresetName);
 }
 
+
 function applyPresetToUI(name){
   activePresetName = name;
-  setStatus("Preset: " + name, true);
+
+  // No sliders in public UI: preset determines everything.
+  // We still keep internal multipliers at 100 via sliderValue() fallback.
+  updateUIReadouts();
   render();
 }
 
-function updateUIReadouts(){ /* no sliders */ }
+
+function updateUIReadouts(){
+  uiVal("strength", (sliderValue("strength")/100).toFixed(2));
+  uiVal("swirl", (sliderValue("swirl")/100).toFixed(2));
+  uiVal("halation", (sliderValue("halation")/100).toFixed(2));
+  uiVal("vignette", (sliderValue("vignette")/100).toFixed(2));
+  uiVal("ca", (sliderValue("ca")/100).toFixed(2));
+  uiVal("flare", (sliderValue("flare")/100).toFixed(2));
+  uiVal("contrast", (sliderValue("contrast")/100).toFixed(2));
+  uiVal("saturation", (sliderValue("saturation")/100).toFixed(2));
+}
 
 function onFile(file){
   if(!file) return;
@@ -416,17 +449,17 @@ function render(){
   if(!srcImg) return;
 
   const preset = presets[activePresetName] || {};
-  const mulVignette = 1;
-  const mulHalation = 1;
-  const mulCA = 1;
-  const mulFlare = 1;
-  const mulSwirl = 1;
+  const mulVignette = sliderValue("vignette")/100;
+  const mulHalation = sliderValue("halation")/100;
+  const mulCA = sliderValue("ca")/100;
+  const mulFlare = sliderValue("flare")/100;
+  const mulSwirl = sliderValue("swirl")/100;
 
   const strength = strength01();
   const base = presetWithStrength(preset, 100);
 
-  const contrast = ($("contrast") ? (sliderValue("contrast")/100) : (preset.contrast ?? 1.0)); // absolute
-  const saturation = ($("saturation") ? (sliderValue("saturation")/100) : (preset.saturation ?? 1.0)); // absolute
+  const contrast = (sliderValue("contrast")/100); // absolute
+  const saturation = (sliderValue("saturation")/100); // absolute
   const warmth = (preset.warmth ?? 0) * clamp(strength,0,2);
 
   // 1) draw source
@@ -434,7 +467,7 @@ function render(){
   aCtx.clearRect(0,0,srcW,srcH);
   aCtx.drawImage(srcImg, 0,0);
 
-  if($("showBefore") && $("showBefore").checked){
+  if($("showBefore").checked){
     ctx.setTransform(1,0,0,1,0,0);
     ctx.clearRect(0,0,srcW,srcH);
     ctx.drawImage(srcImg,0,0);
@@ -540,32 +573,38 @@ function safeName(s){
   return (s||"preset").replace(/[^\w\-]+/g,"_").slice(0,64);
 }
 
+
 function bind(){
-  $("fileInput").addEventListener("change", (e)=> onFile(e.target.files[0]));
+  const fi = $("fileInput");
+  if(fi) fi.addEventListener("change", (e)=> onFile(e.target.files[0]));
 
-  $("presetSelect").addEventListener("change", (e)=>{
-    applyPresetToUI(e.target.value);
-  });
+  const ps = $("presetSelect");
+  if(ps) ps.addEventListener("change", (e)=> applyPresetToUI(e.target.value));
 
-  const rerenderIds = ["strength","swirl","halation","vignette","ca","flare","contrast","saturation","showBefore"];
+  // No sliders in public UI. Only rerender on toggles (if present).
+  const rerenderIds = ["showBefore","autoFit"];
   rerenderIds.forEach(id => {
-    $(id).addEventListener("input", ()=>{ updateUIReadouts(); render(); });
-    $(id).addEventListener("change", ()=>{ updateUIReadouts(); render(); });
+    const el = $(id);
+    if(!el) return;
+    el.addEventListener("input", ()=>{ updateUIReadouts(); render(); });
+    el.addEventListener("change", ()=>{ updateUIReadouts(); render(); });
   });
 
-  $("randomizeFlare").addEventListener("click", ()=>{
+  const rf = $("randomizeFlare");
+  if(rf) rf.addEventListener("click", ()=>{
     flareSeed = Math.floor(Math.random()*1e9);
     render();
   });
 
-  $("exportPng").addEventListener("click", ()=>{
+  const ep = $("exportPng");
+  if(ep) ep.addEventListener("click", ()=>{
     if(!srcImg) return;
-    exportCanvas(`TVL_LensEmulator_${safeName(activePresetName)}.png`, canvas);
+    exportCanvas(`TVL_LensEmulator_${safeName(activePresetName || "Preset")}.png`, canvas);
   });
 
-  $("exportSplit").addEventListener("click", ()=> exportSplit());
+  const es = $("exportSplit");
+  if(es) es.addEventListener("click", ()=> exportSplit());
 
   updateUIReadouts();
 }
-
-loadPresets().then(bind);
+Promise.all([loadPresets(), loadGlProfiles()]).then(bind);
