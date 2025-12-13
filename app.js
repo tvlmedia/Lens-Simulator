@@ -34,7 +34,7 @@ const PARAMS = [
   { key:"fieldCurvature", label:"Field curvature", min:-3,   max:3, step:0.01 },
   { key:"edgeSoftness",   label:"Edge softness",   min:-3,   max:3, step:0.01 },
   { key:"coma",           label:"Coma",            min:-3,   max:3, step:0.01 },
-  { key:"comaAnamorph",   label:"Coma anamorph",   min:-3,   max:3, step:0.01 },,
+  { key:"comaAnamorph",   label:"Coma anamorph",   min:-3,   max:3, step:0.01 },
   { key:"bloom",          label:"Bloom",           min:-3,   max:3, step:0.01 },
   { key:"bloomWarmth",    label:"Bloom warmth",    min:-3,   max:3, step:0.01 },
   { key:"ca",             label:"CA",              min:-3,   max:3, step:0.01 },
