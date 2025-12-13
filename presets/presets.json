@@ -1,13 +1,22 @@
 {
-  "name": "IronGlass Soviet MKII — 50mm T2.8 (Venice FF)",
-  "fieldCurvature": 0.55,
-  "edgeSoftness": 0.65,
-  "coma": 0.42,
-  "comaAnamorph": 0.55,
-  "bloom": 0.38,
-  "bloomWarmth": 0.22,
-  "ca": 0.18,
-  "vignette": 0.22,
-  "asymX": 0.03,
-  "asymY": -0.02
+  "DZO Arles (clean)": {
+    "contrast": 1.00,
+    "saturation": 1.00,
+    "warmth": 0.00,
+    "vignette": 0.05,
+    "halation": 0.05,
+    "ca": 0.02,
+    "flare": 0.05,
+    "swirl": 0.00
+  },
+  "IronGlass Soviet MKII (heftig artistiek)": {
+    "contrast": 1.01,
+    "saturation": 0.97,
+    "warmth": 0.02,
+    "vignette": 0.28,
+    "halation": 0.55,
+    "ca": 0.22,
+    "flare": 0.75,
+    "swirl": 0.35
+  }
 }
