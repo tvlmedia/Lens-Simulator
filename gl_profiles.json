@@ -22,12 +22,17 @@
     "vignette": 0.22,
     "asymX": 0.03,
     "asymY": -0.02
-  }
+  },
   "TEST": {
-  "fieldCurvature": 1.2,
-  "edgeSoftness": 1.0,
-  "coma": 1.0,
-  "bloom": 0.8,
-  "bloomWarmth": 0.5,
-  "ca": 0.6
+    "fieldCurvature": 1.2,
+    "edgeSoftness": 1.0,
+    "coma": 1.0,
+    "comaAnamorph": 1.0,
+    "bloom": 0.8,
+    "bloomWarmth": 0.5,
+    "ca": 0.6,
+    "vignette": 1.0,
+    "asymX": 1.0,
+    "asymY": 1.0
+  }
 }
