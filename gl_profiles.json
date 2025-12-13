@@ -23,4 +23,12 @@
     "asymX": 0.03,
     "asymY": -0.02
   }
+  "TEST": {
+  "fieldCurvature": 1.2,
+  "edgeSoftness": 1.0,
+  "coma": 1.0,
+  "bloom": 0.8,
+  "bloomWarmth": 0.5,
+  "ca": 0.6
+}
 }
