@@ -9,12 +9,12 @@
     "veil": 0.0
   },
   "IronGlass Soviet MKII (50mm T2.8)": {
-    "globalSoft": 0.22,
-    "edgeSoftness": 0.90,
-    "coma": 0.35,
-    "bloom": 0.60,
-    "bloomWarmth": 0.15,
-    "halation": 0.35,
-    "veil": 0.18
+    "globalSoft": 0.18,
+    "edgeSoftness": 0.95,
+    "coma": 0.40,
+    "bloom": 0.85,
+    "bloomWarmth": 0.18,
+    "halation": 0.32,
+    "veil": 0.20
   }
 }
