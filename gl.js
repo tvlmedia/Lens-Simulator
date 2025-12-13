@@ -1,11 +1,10 @@
 /* gl.js — TVL Lens Emulator (WebGL “Lens Profile” pipeline) — FIXED
-   Key fixes vs your current version:
-   1) No feedback loop: composite pass writes into a *separate* texFinal (was writing into texA while also sampling texA)
-   2) Proper program-null checks: if shaders fail to compile, TVLGL.render returns false (instead of silently doing nothing)
-   3) Framebuffer completeness checks + console logging
-   4) Random flare seed hook (for future flare features, and to force visible re-render differences if you want)
-
-   This stays WebGL1 + GitHub Pages friendly.
+   - No feedback loop: composite writes into texFinal (not texA)
+   - Uniforms are set in the right place (cfg exists)
+   - uComaA/uAsym/uVeil/uVign are actually passed to shader
+   - FBO completeness checks + program existence checks
+   - Simple clear per pass to avoid leftovers
+   - Random flare seed hook kept (unused for now)
 */
 
 (function () {
@@ -13,7 +12,6 @@
   window.TVLGL = TVLGL;
 
   let _flareSeed = Math.random() * 1000000;
-
   TVLGL.available = () => !!TVLGL._gl;
   TVLGL.randomizeFlare = () => { _flareSeed = Math.random() * 1000000; };
 
@@ -85,16 +83,16 @@
       gl.STATIC_DRAW
     );
 
-    TVLGL._prog = program(gl, VERT, FRAG_LENS, "LENS");
+    TVLGL._prog      = program(gl, VERT, FRAG_LENS,  "LENS");
     TVLGL._progBloom = program(gl, VERT, FRAG_BLOOM, "BLOOM");
-    TVLGL._progComp = program(gl, VERT, FRAG_COMP, "COMP");
+    TVLGL._progComp  = program(gl, VERT, FRAG_COMP,  "COMP");
 
     TVLGL._texSrc   = tex(gl);
     TVLGL._texA     = tex(gl);
     TVLGL._texBloom = tex(gl);
     TVLGL._texFinal = tex(gl);
 
-    TVLGL._fbA = gl.createFramebuffer();
+    TVLGL._fbA     = gl.createFramebuffer();
     TVLGL._fbBloom = gl.createFramebuffer();
     TVLGL._fbFinal = gl.createFramebuffer();
 
@@ -110,16 +108,15 @@
     TVLGL._h = h;
     TVLGL._readBuf = new Uint8Array(w * h * 4);
 
-    alloc(gl, TVLGL._texSrc, w, h);
-    alloc(gl, TVLGL._texA, w, h);
+    alloc(gl, TVLGL._texSrc,   w, h);
+    alloc(gl, TVLGL._texA,     w, h);
     alloc(gl, TVLGL._texBloom, w, h);
     alloc(gl, TVLGL._texFinal, w, h);
 
-    attach(gl, TVLGL._fbA, TVLGL._texA);
+    attach(gl, TVLGL._fbA,     TVLGL._texA);
     attach(gl, TVLGL._fbBloom, TVLGL._texBloom);
     attach(gl, TVLGL._fbFinal, TVLGL._texFinal);
 
-    // Check completeness once
     if (!fbOk(gl, TVLGL._fbA, "fbA")) return false;
     if (!fbOk(gl, TVLGL._fbBloom, "fbBloom")) return false;
     if (!fbOk(gl, TVLGL._fbFinal, "fbFinal")) return false;
@@ -149,34 +146,33 @@
     const gl = TVLGL._gl;
     const w = TVLGL._w;
     const h = TVLGL._h;
-     uni1(gl, TVLGL._prog, "uComaA", cfg.comaA);
-uni1(gl, TVLGL._prog, "uVign", cfg.vign);
-uni2(gl, TVLGL._prog, "uAsym", cfg.ax, cfg.ay);
-uni1(gl, TVLGL._prog, "uVeil", cfg.veil);
 
     const cfg = {
-  field: p.fieldCurvature ?? 0.55,
-  edge: p.edgeSoftness ?? 0.65,
-  coma: p.coma ?? 0.45,
-  comaA: p.comaAnamorph ?? 0.55,
-  ca: p.ca ?? 0.18,
+      field: (p.fieldCurvature ?? 0.55),
+      edge:  (p.edgeSoftness   ?? 0.65),
+      coma:  (p.coma           ?? 0.45),
+      comaA: (p.comaAnamorph   ?? 0.55),
+      ca:    (p.ca             ?? 0.18),
 
-  bloom: p.bloom ?? 0.35,
-  warm: p.bloomWarmth ?? 0.22,
+      bloom: (p.bloom          ?? 0.35),
+      warm:  (p.bloomWarmth    ?? 0.22),
 
-  vign: p.vignette ?? 0.22,
-  ax: p.asymX ?? 0.0,
-  ay: p.asymY ?? 0.0,
+      vign:  (p.vignette       ?? 0.22),
+      ax:    (p.asymX          ?? 0.0),
+      ay:    (p.asymY          ?? 0.0),
 
-  // nieuw (optioneel later in JSON): “milk/veil”
-  veil: p.veiling ?? 0.25
-};
+      // "milk/veil" (optioneel in JSON als "veil")
+      veil:  (p.veil           ?? 0.25),
+    };
 
     gl.viewport(0, 0, w, h);
 
-    // PASS 1: lens warp/CA/coma (+ vignette) -> texA (fbA)
+    // PASS 1: lens warp/CA/coma + vignette/asym/veil -> texA (fbA)
     quad(gl, TVLGL._prog);
     gl.bindFramebuffer(gl.FRAMEBUFFER, TVLGL._fbA);
+
+    gl.clearColor(0, 0, 0, 1);
+    gl.clear(gl.COLOR_BUFFER_BIT);
 
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, TVLGL._texSrc);
@@ -184,10 +180,14 @@ uni1(gl, TVLGL._prog, "uVeil", cfg.veil);
     uniS(gl, TVLGL._prog, "uTex", 0);
     uni2(gl, TVLGL._prog, "uRes", w, h);
     uni1(gl, TVLGL._prog, "uField", cfg.field);
-    uni1(gl, TVLGL._prog, "uEdge", cfg.edge);
-    uni1(gl, TVLGL._prog, "uComa", cfg.coma);
-    uni1(gl, TVLGL._prog, "uCA", cfg.ca);
-    uni1(gl, TVLGL._prog, "uVign", cfg.vign);
+    uni1(gl, TVLGL._prog, "uEdge",  cfg.edge);
+    uni1(gl, TVLGL._prog, "uComa",  cfg.coma);
+    uni1(gl, TVLGL._prog, "uComaA", cfg.comaA);
+    uni1(gl, TVLGL._prog, "uCA",    cfg.ca);
+
+    uni1(gl, TVLGL._prog, "uVign",  cfg.vign);
+    uni2(gl, TVLGL._prog, "uAsym",  cfg.ax, cfg.ay);
+    uni1(gl, TVLGL._prog, "uVeil",  cfg.veil);
 
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
@@ -195,18 +195,24 @@ uni1(gl, TVLGL._prog, "uVeil", cfg.veil);
     quad(gl, TVLGL._progBloom);
     gl.bindFramebuffer(gl.FRAMEBUFFER, TVLGL._fbBloom);
 
+    gl.clearColor(0, 0, 0, 1);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, TVLGL._texA);
 
     uniS(gl, TVLGL._progBloom, "uTex", 0);
     uni1(gl, TVLGL._progBloom, "uBloom", cfg.bloom);
-    uni1(gl, TVLGL._progBloom, "uWarm", cfg.warm);
+    uni1(gl, TVLGL._progBloom, "uWarm",  cfg.warm);
 
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
     // PASS 3: composite -> texFinal (fbFinal)
     quad(gl, TVLGL._progComp);
     gl.bindFramebuffer(gl.FRAMEBUFFER, TVLGL._fbFinal);
+
+    gl.clearColor(0, 0, 0, 1);
+    gl.clear(gl.COLOR_BUFFER_BIT);
 
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, TVLGL._texA);
@@ -275,15 +281,15 @@ uni1(gl, TVLGL._prog, "uVeil", cfg.veil);
     gl.useProgram(prog);
     gl.bindBuffer(gl.ARRAY_BUFFER, TVLGL._quad);
     const aPos = gl.getAttribLocation(prog, "aPos");
-    const aUv = gl.getAttribLocation(prog, "aUv");
+    const aUv  = gl.getAttribLocation(prog, "aUv");
     gl.enableVertexAttribArray(aPos);
     gl.enableVertexAttribArray(aUv);
     gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 16, 0);
-    gl.vertexAttribPointer(aUv, 2, gl.FLOAT, false, 16, 8);
+    gl.vertexAttribPointer(aUv,  2, gl.FLOAT, false, 16, 8);
   }
 
   function uniLoc(gl, prog, name) {
-    return gl.getUniformLocation(prog, name); // can be null OR a location object
+    return gl.getUniformLocation(prog, name);
   }
   function uni1(gl, prog, name, v) {
     const loc = uniLoc(gl, prog, name);
@@ -313,7 +319,7 @@ uni1(gl, TVLGL._prog, "uVeil", cfg.veil);
     }
   `;
 
- const FRAG_LENS = `
+  const FRAG_LENS = `
 precision mediump float;
 varying vec2 vUv;
 uniform sampler2D uTex;
@@ -332,24 +338,20 @@ uniform float uVeil;
 float luma(vec3 c){ return dot(c, vec3(0.2126,0.7152,0.0722)); }
 
 void main(){
-  vec2 c = vec2(0.5) + uAsym * 0.08;      // asym center shift (subtiel maar voelbaar)
+  vec2 c = vec2(0.5) + uAsym * 0.08;
   vec2 d = vUv - c;
 
-  // elliptical radius (anamo/coma feel)
   vec2 de = d * vec2(1.0 + uComaA*0.55, 1.0 - uComaA*0.25);
   float r = length(de);
 
   vec2 dir = normalize(de + 1e-6);
   vec2 px = 1.0 / uRes;
 
-  // edge mask
   float edge = smoothstep(0.18, 0.98, r);
 
-  // field curvature-ish warp (klein, maar helpt)
   vec2 warp = de * (uField * edge * 0.035);
   vec2 uvw  = vUv + warp;
 
-  // chromatic aberration (op edge)
   vec2 ca = dir * uCA * edge * 0.0045;
 
   vec3 col = vec3(
@@ -358,17 +360,14 @@ void main(){
     texture2D(uTex, uvw - ca).b
   );
 
-  // coma / astig smear (directioneel, sterker naar edge)
   float blur = edge * (uEdge * 0.85 + uField * 0.25);
   vec2 smear = dir * px * (uComa * edge) * 18.0;
   vec3 smeared = texture2D(uTex, uvw + smear).rgb;
   col = mix(col, smeared, blur);
 
-  // vignette (donkerder naar edge)
   float vig = smoothstep(0.10, 1.00, r);
   col *= (1.0 - uVign * 0.55 * vig);
 
-  // veiling glare / milk (lift blacks + wash, maar vooral in highlights/edges)
   float y = luma(col);
   float veilMask = smoothstep(0.35, 1.00, y) * (0.35 + 0.65*edge);
   col = mix(col, col + vec3(1.0)*0.35, uVeil * veilMask);
@@ -378,38 +377,37 @@ void main(){
 `;
 
   const FRAG_BLOOM = `
-    precision mediump float;
-    varying vec2 vUv;
-    uniform sampler2D uTex;
-    uniform float uBloom;
-    uniform float uWarm;
+precision mediump float;
+varying vec2 vUv;
+uniform sampler2D uTex;
+uniform float uBloom;
+uniform float uWarm;
 
-    void main(){
-      vec3 c = texture2D(uTex, vUv).rgb;
-      float y = dot(c, vec3(0.2126, 0.7152, 0.0722));
-      float m = smoothstep(0.80, 1.00, y) * uBloom;
-      vec3 b = c * m;
+void main(){
+  vec3 c = texture2D(uTex, vUv).rgb;
+  float y = dot(c, vec3(0.2126, 0.7152, 0.0722));
+  float m = smoothstep(0.80, 1.00, y) * uBloom;
+  vec3 b = c * m;
 
-      // warm tint
-      b.r *= 1.0 + 0.6 * uWarm;
-      b.g *= 1.0 + 0.2 * uWarm;
+  b.r *= 1.0 + 0.6 * uWarm;
+  b.g *= 1.0 + 0.2 * uWarm;
 
-      gl_FragColor = vec4(b, 1.0);
-    }
-  `;
+  gl_FragColor = vec4(b, 1.0);
+}
+`;
 
   const FRAG_COMP = `
-    precision mediump float;
-    varying vec2 vUv;
-    uniform sampler2D uTex;
-    uniform sampler2D uBloomTex;
+precision mediump float;
+varying vec2 vUv;
+uniform sampler2D uTex;
+uniform sampler2D uBloomTex;
 
-    void main(){
-      vec3 a = texture2D(uTex, vUv).rgb;
-      vec3 b = texture2D(uBloomTex, vUv).rgb;
-      // screen blend
-      vec3 outc = 1.0 - (1.0 - a) * (1.0 - b);
-      gl_FragColor = vec4(outc, 1.0);
-    }
-  `;
+void main(){
+  vec3 a = texture2D(uTex, vUv).rgb;
+  vec3 b = texture2D(uBloomTex, vUv).rgb;
+  vec3 outc = 1.0 - (1.0 - a) * (1.0 - b); // screen
+  gl_FragColor = vec4(outc, 1.0);
+}
+`;
+
 })();
