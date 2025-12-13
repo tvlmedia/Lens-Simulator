@@ -1,15 +1,15 @@
 {
   "DZO Arles (clean)": {
-    "fieldCurvature": 0.10,
-    "edgeSoftness": 0.10,
+    "fieldCurvature": 0.1,
+    "edgeSoftness": 0.1,
     "coma": 0.08,
-    "comaAnamorph": 0.20,
-    "bloom": 0.10,
+    "comaAnamorph": 0.2,
+    "bloom": 0.1,
     "bloomWarmth": 0.08,
     "ca": 0.03,
     "vignette": 0.08,
-    "asymX": 0.00,
-    "asymY": 0.00
+    "asymX": 0.0,
+    "asymY": 0.0
   },
   "IronGlass Soviet MKII (50mm T2.8)": {
     "fieldCurvature": 0.55,

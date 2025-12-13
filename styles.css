@@ -85,17 +85,6 @@ select, input[type="file"]{
   outline:none;
 }
 
-.grid2{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:10px}
-.ctrl{
-  background:rgba(0,0,0,.16);
-  border:1px solid rgba(255,255,255,.06);
-  border-radius:14px;
-  padding:10px 10px 12px;
-}
-.ctrlhead{display:flex; justify-content:space-between; align-items:center; font-weight:800; font-size:13px}
-.val{color:var(--muted); font-weight:700}
-input[type="range"]{width:100%}
-
 .toggles{margin-top:10px; justify-content:space-between}
 .toggle{display:flex; gap:8px; align-items:center; color:var(--muted); font-weight:700; font-size:12px}
 

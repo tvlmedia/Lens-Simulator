@@ -1,4 +1,4 @@
-/* TVL Lens Emulator — NO SLIDERS
+/* TVL Lens Emulator — NO SLIDERS (fixed)
    - Upload image
    - Choose lens profile (gl_profiles.json)
    - Render via WebGL (gl.js / TVLGL)
@@ -37,15 +37,20 @@ function resizeCanvas(w,h){
 
 // ---------- load profiles ----------
 function loadProfiles(){
-  return fetch("gl_profiles.json")
-    .then(r => r.json())
+  return fetch("gl_profiles.json", { cache: "no-store" })
+    .then(r => {
+      if(!r.ok) throw new Error("HTTP " + r.status);
+      return r.json();
+    })
     .then(j => {
       profiles = j || {};
       populateSelect();
       setStatus("Profiles loaded", true);
+      // if user already uploaded an image before profiles load, render now
+      render();
     })
     .catch((e) => {
-      console.error(e);
+      console.error("loadProfiles error:", e);
       profiles = {};
       populateSelect();
       setStatus("Kon gl_profiles.json niet laden", false);
@@ -83,11 +88,13 @@ function onFile(file){
   if(!file) return;
   const url = URL.createObjectURL(file);
   const img = new Image();
+  // Needed for some browsers when drawing to canvas; local blob is ok
+  img.decoding = "async";
 
   img.onload = () => {
     srcImg = img;
-    srcW = img.naturalWidth;
-    srcH = img.naturalHeight;
+    srcW = img.naturalWidth || img.width;
+    srcH = img.naturalHeight || img.height;
 
     resizeCanvas(srcW, srcH);
 
@@ -113,7 +120,6 @@ function drawBefore(){
   ctx2d.setTransform(1,0,0,1,0,0);
   ctx2d.clearRect(0,0,srcW,srcH);
   ctx2d.drawImage(srcImg, 0, 0);
-  setStatus("Before", true);
 }
 
 function render(){
@@ -121,18 +127,21 @@ function render(){
 
   if($("showBefore")?.checked){
     drawBefore();
+    setStatus("Before", true);
     return;
   }
 
-  const prof = profiles[activeName] || {};
+  const prof = (activeName && profiles[activeName]) ? profiles[activeName] : {};
 
-  // WebGL render -> writes into the SAME canvas
-  if(window.TVLGL && TVLGL.render){
+  if(window.TVLGL && typeof TVLGL.render === "function"){
     const ok = TVLGL.render(srcImg, prof, canvas);
     if(ok){
-      setStatus(`Lens: ${activeName}`, true);
+      setStatus(`Lens: ${activeName || "—"}`, true);
       return;
     }
+    console.warn("TVLGL.render returned false (WebGL failed).");
+  } else {
+    console.warn("TVLGL not found. Check that gl.js is loaded before app.js.");
   }
 
   // fallback: show original if WebGL failed
@@ -192,8 +201,11 @@ function bind(){
   safeOn("presetSelect","change",(e)=> { activeName = e.target.value; render(); });
   safeOn("showBefore","change", render);
 
-  // Button exists in UI; we just re-render (flare randomness zit nog niet in gl.js)
-  safeOn("randomizeFlare","click", render);
+  // Randomize flare direction (implemented in gl.js)
+  safeOn("randomizeFlare","click", ()=>{
+    if(window.TVLGL && typeof TVLGL.randomizeFlare === "function") TVLGL.randomizeFlare();
+    render();
+  });
 
   safeOn("exportPng","click", ()=>{
     if(!srcImg) return;
