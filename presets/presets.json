@@ -19,6 +19,16 @@
     "flare": 0.32,
     "swirl": 0.22
   },
+  "IronGlass Soviet MKII (heftig artistiek)": {
+    "contrast": 1.01,
+    "saturation": 0.97,
+    "warmth": 0.02,
+    "vignette": 0.28,
+    "halation": 0.55,
+    "ca": 0.22,
+    "flare": 0.75,
+    "swirl": 0.35
+  },
   "Cooke-ish (warm, clean rolloff)": {
     "contrast": 1.01,
     "saturation": 1.05,

@@ -36,10 +36,12 @@
           <select id="presetSelect"></select>
           <button id="randomizeFlare" class="btn ghost">Random flare</button>
         </div>
+        <div class="hint small">Als de dropdown leeg is: check of <span class="mono">presets/presets.json</span> bestaat en valide JSON is.</div>
       </div>
 
       <div class="block">
         <label class="label">3) Sterkte</label>
+
         <div class="grid2">
           <div class="ctrl">
             <div class="ctrlhead"><span>Strength</span><span id="v_strength" class="val"></span></div>
@@ -92,8 +94,7 @@
         </div>
 
         <div class="hint small">
-          Dit is een MVP (client-side). “Perfect Helios” in 100% van de shots bestaat niet zonder lens-data/model,
-          maar dit komt vaak al verrassend dichtbij.
+          MVP (client-side). Wil je “super accurate” dan heb je lens-data / paired training nodig.
         </div>
       </div>
     </section>

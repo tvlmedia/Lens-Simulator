@@ -30,7 +30,8 @@ function setStatus(text, good=false){
 }
 
 function setDimsText(){
-  $("dimPill").textContent = srcImg ? `${srcW}×${srcH}` : "—";
+  const el = $("dimPill");
+  if(el) el.textContent = srcImg ? `${srcW}×${srcH}` : "—";
 }
 
 function uiVal(id, text){
@@ -150,7 +151,8 @@ function onFile(file){
     srcW = img.naturalWidth;
     srcH = img.naturalHeight;
     resizeAll(srcW, srcH);
-    $("emptyState").style.display = "none";
+    const es = $("emptyState");
+    if(es) es.style.display = "none";
     setDimsText();
     setStatus("Loaded", true);
     render();
