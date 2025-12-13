@@ -6,8 +6,11 @@
 */
 
 const $ = (id) => document.getElementById(id);
-const has = (id)=> !!$(id);
-const setIf = (id, prop, val)=>{ const el=$(id); if(!el) return; el[prop]=val; };
+
+function safeOn(id, evt, fn){
+  const el = $(id);
+  if(el) el.addEventListener(evt, fn);
+}
 
 const canvas = $("canvas");
 const ctx = canvas.getContext("2d", { willReadFrequently: true });
@@ -20,8 +23,6 @@ const bCtx = offB.getContext("2d", { willReadFrequently: true });
 let srcImg = null;
 let srcW = 0, srcH = 0;
 let presets = {};
-let glProfiles = {};
-
 let activePresetName = "";
 let flareSeed = Math.random() * 9999;
 
@@ -45,13 +46,13 @@ function uiVal(id, text){
 
 function sliderValue(id){
   const el = $(id);
-  if(!el) return 100;
-  return Number(el.value);
+  if(!el) return 100; // default
+  const v = Number(el.value);
+  return Number.isFinite(v) ? v : 100;
 }
 
 function strength01(){
-  // Public version: fixed strength when there is no slider.
-  if(!has("strength")) return 1.0;
+  // If slider is removed, default to 1.0
   return sliderValue("strength") / 100;
 }
 
@@ -89,34 +90,14 @@ function fitCanvasToViewer(){
 }
 
 function loadPresets(){
-  // Try both locations so GitHub Pages works whether you use /presets/ folder or repo root.
-  const candidates = ["presets/presets.json", "presets.json"];
-  return fetchAnyJson(candidates)
-    .then(j => { presets = j || {}; populatePresets(); })
+  return fetch("presets/presets.json")
+    .then(r => r.json())
+    .then(j => { presets = j; populatePresets(); })
     .catch(() => {
       presets = {};
       populatePresets();
       setStatus("Kon presets niet laden (presets.json).", false);
-    })
-    .then(() => loadGLProfiles()); // best-effort
-}
-
-function fetchAnyJson(urls){
-  let lastErr = null;
-  return urls.reduce((p, url) => p.catch(err => {
-    lastErr = err;
-    return fetch(url).then(r => {
-      if(!r.ok) throw new Error("HTTP " + r.status + " for " + url);
-      return r.json();
     });
-  }), Promise.reject()).catch(() => { throw lastErr || new Error("fetchAnyJson failed"); });
-}
-
-function loadGLProfiles(){
-  const urls = ["presets/gl_profiles.json", "gl_profiles.json"];
-  return fetchAnyJson(urls)
-    .then(j => { glProfiles = j || {}; })
-    .catch(() => { glProfiles = {}; });
 }
 
 function populatePresets(){
@@ -145,23 +126,29 @@ function applyPresetToUI(name){
   activePresetName = name;
   const p = presets[name];
   // set default slider baselines to 100, but tweak contrast/sat based on preset
-  setIf("contrast","value", Math.round((p.contrast ?? 1.0) * 100));
-  setIf("saturation","value", Math.round((p.saturation ?? 1.0) * 100));
+  $("contrast").value = Math.round((p.contrast ?? 1.0) * 100);
+  $("saturation").value = Math.round((p.saturation ?? 1.0) * 100);
 
-  setIf("vignette","value", 100);
-  setIf("halation","value", 100);
-  setIf("ca","value", 100);
-  setIf("flare","value", 100);
-  setIf("swirl","value", 100);
-  setIf("strength","value", 100);
+  $("vignette").value = 100;
+  $("halation").value = 100;
+  $("ca").value = 100;
+  $("flare").value = 100;
+  $("swirl").value = 100;
+  $("strength").value = 100;
 
   updateUIReadouts();
   render();
 }
 
 function updateUIReadouts(){
-  // Public version: no sliders. Keep only dimensions text.
-  setDimsText();
+  uiVal("strength", (sliderValue("strength")/100).toFixed(2));
+  uiVal("swirl", (sliderValue("swirl")/100).toFixed(2));
+  uiVal("halation", (sliderValue("halation")/100).toFixed(2));
+  uiVal("vignette", (sliderValue("vignette")/100).toFixed(2));
+  uiVal("ca", (sliderValue("ca")/100).toFixed(2));
+  uiVal("flare", (sliderValue("flare")/100).toFixed(2));
+  uiVal("contrast", (sliderValue("contrast")/100).toFixed(2));
+  uiVal("saturation", (sliderValue("saturation")/100).toFixed(2));
 }
 
 function onFile(file){
@@ -457,19 +444,6 @@ function mulberry32(a){
 function render(){
   if(!srcImg) return;
 
-  // If WebGL lens sim is available, run it first using gl_profiles.json (optional).
-  try{
-    if(window.TVLGL && typeof window.TVLGL.render === "function"){
-      const prof = glProfiles?.[activePresetName];
-      if(prof){
-        window.TVLGL.render(srcImg, canvas, prof);
-        // After GL pass, we can still apply subtle grading/overlays in the CPU pipeline below if needed.
-      }
-    }
-  }catch(e){
-    // fall back silently to CPU pipeline
-  }
-
   const preset = presets[activePresetName] || {};
   const mulVignette = sliderValue("vignette")/100;
   const mulHalation = sliderValue("halation")/100;
@@ -596,17 +570,30 @@ function safeName(s){
 }
 
 function bind(){
-  if(has("fileInput")) $("fileInput").addEventListener("change", (e)=> onFile(e.target.files[0]));
+  // Upload
+  safeOn("fileInput","change",(e)=> onFile(e.target.files && e.target.files[0]));
 
-  if(has("presetSelect")) $("presetSelect").addEventListener("change", (e)=> applyPresetToUI(e.target.value));
+  // Preset dropdown
+  safeOn("presetSelect","change",(e)=> applyPresetToUI(e.target.value));
 
-  if(has("showBefore")) $("showBefore").addEventListener("change", ()=> render());
+  // Optional controls (may not exist in no-sliders build)
+  const rerenderIds = ["showBefore","autoFit","strength","swirl","halation","vignette","ca","flare","contrast","saturation"];
+  rerenderIds.forEach(id => {
+    safeOn(id,"input", ()=>{ updateUIReadouts(); render(); });
+    safeOn(id,"change", ()=>{ updateUIReadouts(); render(); });
+  });
 
-  if(has("randomizeFlare")) $("randomizeFlare").addEventListener("click", ()=>{ flareSeed = Math.floor(Math.random()*1e9); render(); });
+  safeOn("randomizeFlare","click", ()=>{
+    flareSeed = Math.floor(Math.random()*1e9);
+    render();
+  });
 
-  if(has("exportPng")) $("exportPng").addEventListener("click", ()=>{ if(!srcImg) return; exportCanvas(`TVL_LensEmulator_${safeName(activePresetName)}.png`, canvas); });
+  safeOn("exportPng","click", ()=>{
+    if(!srcImg) return;
+    exportCanvas(`TVL_LensEmulator_${safeName(activePresetName)}.png`, canvas);
+  });
 
-  if(has("exportSplit")) $("exportSplit").addEventListener("click", ()=> exportSplit());
+  safeOn("exportSplit","click", ()=> exportSplit());
 
   updateUIReadouts();
 }
