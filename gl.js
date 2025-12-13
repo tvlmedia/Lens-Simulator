@@ -149,17 +149,28 @@
     const gl = TVLGL._gl;
     const w = TVLGL._w;
     const h = TVLGL._h;
+     uni1(gl, TVLGL._prog, "uComaA", cfg.comaA);
+uni1(gl, TVLGL._prog, "uVign", cfg.vign);
+uni2(gl, TVLGL._prog, "uAsym", cfg.ax, cfg.ay);
+uni1(gl, TVLGL._prog, "uVeil", cfg.veil);
 
     const cfg = {
-      field: p.fieldCurvature ?? 0.55,
-      edge:  p.edgeSoftness  ?? 0.65,
-      coma:  p.coma          ?? 0.45,
-      ca:    p.ca            ?? 0.18,
-      bloom: p.bloom         ?? 0.35,
-      warm:  p.bloomWarmth   ?? 0.22,
-      vign:  p.vignette      ?? 0.18,
-      seed:  _flareSeed
-    };
+  field: p.fieldCurvature ?? 0.55,
+  edge: p.edgeSoftness ?? 0.65,
+  coma: p.coma ?? 0.45,
+  comaA: p.comaAnamorph ?? 0.55,
+  ca: p.ca ?? 0.18,
+
+  bloom: p.bloom ?? 0.35,
+  warm: p.bloomWarmth ?? 0.22,
+
+  vign: p.vignette ?? 0.22,
+  ax: p.asymX ?? 0.0,
+  ay: p.asymY ?? 0.0,
+
+  // nieuw (optioneel later in JSON): “milk/veil”
+  veil: p.veiling ?? 0.25
+};
 
     gl.viewport(0, 0, w, h);
 
@@ -302,48 +313,69 @@
     }
   `;
 
-  const FRAG_LENS = `
-    precision mediump float;
-    varying vec2 vUv;
-    uniform sampler2D uTex;
-    uniform vec2 uRes;
-    uniform float uField;
-    uniform float uEdge;
-    uniform float uComa;
-    uniform float uCA;
-    uniform float uVign;
+ const FRAG_LENS = `
+precision mediump float;
+varying vec2 vUv;
+uniform sampler2D uTex;
+uniform vec2 uRes;
 
-    void main(){
-      vec2 c = vec2(0.5);
-      vec2 d = vUv - c;
-      float r = length(d);
-      vec2 dir = normalize(d + 0.00001);
-      vec2 px = 1.0 / uRes;
+uniform float uField;
+uniform float uEdge;
+uniform float uComa;
+uniform float uComaA;
+uniform float uCA;
 
-      float edge = smoothstep(0.25, 0.92, r);
+uniform float uVign;
+uniform vec2  uAsym;
+uniform float uVeil;
 
-      // chromatic aberration (visible at edges)
-      vec2 ca = dir * uCA * edge * 0.0022;
+float luma(vec3 c){ return dot(c, vec3(0.2126,0.7152,0.0722)); }
 
-      vec3 col = vec3(
-        texture2D(uTex, vUv + ca).r,
-        texture2D(uTex, vUv).g,
-        texture2D(uTex, vUv - ca).b
-      );
+void main(){
+  vec2 c = vec2(0.5) + uAsym * 0.08;      // asym center shift (subtiel maar voelbaar)
+  vec2 d = vUv - c;
 
-      // coma smear (directional)
-      float blur = edge * (uField * 0.35 + uEdge * 0.65);
-      vec2 smear = dir * px * uComa * edge * 7.0;
-      vec3 smeared = texture2D(uTex, vUv + smear).rgb;
-      col = mix(col, smeared, blur);
+  // elliptical radius (anamo/coma feel)
+  vec2 de = d * vec2(1.0 + uComaA*0.55, 1.0 - uComaA*0.25);
+  float r = length(de);
 
-      // vignette (makes differences easier to see)
-      float vig = 1.0 - (uVign * 0.9) * (r*r);
-      col *= clamp(vig, 0.0, 1.0);
+  vec2 dir = normalize(de + 1e-6);
+  vec2 px = 1.0 / uRes;
 
-      gl_FragColor = vec4(col, 1.0);
-    }
-  `;
+  // edge mask
+  float edge = smoothstep(0.18, 0.98, r);
+
+  // field curvature-ish warp (klein, maar helpt)
+  vec2 warp = de * (uField * edge * 0.035);
+  vec2 uvw  = vUv + warp;
+
+  // chromatic aberration (op edge)
+  vec2 ca = dir * uCA * edge * 0.0045;
+
+  vec3 col = vec3(
+    texture2D(uTex, uvw + ca).r,
+    texture2D(uTex, uvw).g,
+    texture2D(uTex, uvw - ca).b
+  );
+
+  // coma / astig smear (directioneel, sterker naar edge)
+  float blur = edge * (uEdge * 0.85 + uField * 0.25);
+  vec2 smear = dir * px * (uComa * edge) * 18.0;
+  vec3 smeared = texture2D(uTex, uvw + smear).rgb;
+  col = mix(col, smeared, blur);
+
+  // vignette (donkerder naar edge)
+  float vig = smoothstep(0.10, 1.00, r);
+  col *= (1.0 - uVign * 0.55 * vig);
+
+  // veiling glare / milk (lift blacks + wash, maar vooral in highlights/edges)
+  float y = luma(col);
+  float veilMask = smoothstep(0.35, 1.00, y) * (0.35 + 0.65*edge);
+  col = mix(col, col + vec3(1.0)*0.35, uVeil * veilMask);
+
+  gl_FragColor = vec4(col, 1.0);
+}
+`;
 
   const FRAG_BLOOM = `
     precision mediump float;
