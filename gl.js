@@ -1,6 +1,9 @@
 /* gl.js — TVL Lens Emulator (WebGL “Lens Profile” pipeline)
-   Works on GitHub Pages (pure client-side WebGL1).
-   Purpose: transform clean lenses (DZO Arles) → character lenses (IronGlass MKII).
+   Fixes:
+   - uniform location 0 bug (was: if(!loc) return;)
+   - correct sampler uniforms (uniform1i)
+   - set uTex/uBloomTex properly for bloom + composite passes
+   - basic shader/program compile error logging
 */
 
 (function () {
@@ -23,16 +26,17 @@
 
     const w = img.naturalWidth || img.width;
     const h = img.naturalHeight || img.height;
-    TVLGL.ensure(w, h);
+    if (!TVLGL.ensure(w, h)) return false;
 
     upload(img);
     draw(params || {});
 
     const ctx = outCanvas.getContext("2d");
-    if (!ctx) return;
+    if (!ctx) return false;
 
     const gl = TVLGL._gl;
     const buf = TVLGL._readBuf;
+
     gl.bindFramebuffer(gl.FRAMEBUFFER, TVLGL._fbFinal);
     gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, buf);
 
@@ -43,6 +47,7 @@
       imgData.data.set(buf.subarray(src, src + w * 4), dst);
     }
     ctx.putImageData(imgData, 0, 0);
+    return true;
   };
 
   /* ---------- internals ---------- */
@@ -97,6 +102,7 @@
 
     attach(gl, TVLGL._fbA, TVLGL._texA);
     attach(gl, TVLGL._fbBloom, TVLGL._texBloom);
+    // final also uses texA as output target (same size)
     attach(gl, TVLGL._fbFinal, TVLGL._texA);
   }
 
@@ -119,35 +125,50 @@
       coma: p.coma ?? 0.45,
       ca: p.ca ?? 0.18,
       bloom: p.bloom ?? 0.35,
-      warm: p.bloomWarmth ?? 0.22
+      warm: p.bloomWarmth ?? 0.22,
     };
 
     gl.viewport(0, 0, w, h);
-    quad(gl, TVLGL._prog);
 
+    // PASS 1: lens warp/CA/coma -> texA (fbA)
+    quad(gl, TVLGL._prog);
     gl.bindFramebuffer(gl.FRAMEBUFFER, TVLGL._fbA);
+
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, TVLGL._texSrc);
-    uni(gl, "uTex", 0);
-    uni(gl, "uRes", w, h);
-    uni(gl, "uField", cfg.field);
-    uni(gl, "uEdge", cfg.edge);
-    uni(gl, "uComa", cfg.coma);
-    uni(gl, "uCA", cfg.ca);
+    uniS(gl, TVLGL._prog, "uTex", 0);
+    uni2(gl, TVLGL._prog, "uRes", w, h);
+    uni1(gl, TVLGL._prog, "uField", cfg.field);
+    uni1(gl, TVLGL._prog, "uEdge", cfg.edge);
+    uni1(gl, TVLGL._prog, "uComa", cfg.coma);
+    uni1(gl, TVLGL._prog, "uCA", cfg.ca);
+
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
+    // PASS 2: bloom extract -> texBloom (fbBloom)
     quad(gl, TVLGL._progBloom);
     gl.bindFramebuffer(gl.FRAMEBUFFER, TVLGL._fbBloom);
+
+    gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, TVLGL._texA);
-    uni(gl, "uBloom", cfg.bloom);
-    uni(gl, "uWarm", cfg.warm);
+    uniS(gl, TVLGL._progBloom, "uTex", 0);
+    uni1(gl, TVLGL._progBloom, "uBloom", cfg.bloom);
+    uni1(gl, TVLGL._progBloom, "uWarm", cfg.warm);
+
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
+    // PASS 3: composite -> texA (fbFinal)
     quad(gl, TVLGL._progComp);
     gl.bindFramebuffer(gl.FRAMEBUFFER, TVLGL._fbFinal);
+
+    gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, TVLGL._texA);
     gl.activeTexture(gl.TEXTURE1);
     gl.bindTexture(gl.TEXTURE_2D, TVLGL._texBloom);
+
+    uniS(gl, TVLGL._progComp, "uTex", 0);
+    uniS(gl, TVLGL._progComp, "uBloomTex", 1);
+
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   }
 
@@ -175,9 +196,18 @@
 
   function program(gl, vs, fs) {
     const p = gl.createProgram();
-    gl.attachShader(p, compile(gl, gl.VERTEX_SHADER, vs));
-    gl.attachShader(p, compile(gl, gl.FRAGMENT_SHADER, fs));
+    const sv = compile(gl, gl.VERTEX_SHADER, vs);
+    const sf = compile(gl, gl.FRAGMENT_SHADER, fs);
+    if (!sv || !sf) return null;
+
+    gl.attachShader(p, sv);
+    gl.attachShader(p, sf);
     gl.linkProgram(p);
+
+    if (!gl.getProgramParameter(p, gl.LINK_STATUS)) {
+      console.error("TVLGL program link error:", gl.getProgramInfoLog(p));
+      return null;
+    }
     return p;
   }
 
@@ -185,6 +215,10 @@
     const s = gl.createShader(type);
     gl.shaderSource(s, src);
     gl.compileShader(s);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
+      console.error("TVLGL shader compile error:", gl.getShaderInfoLog(s));
+      return null;
+    }
     return s;
   }
 
@@ -199,12 +233,25 @@
     gl.vertexAttribPointer(aUv, 2, gl.FLOAT, false, 16, 8);
   }
 
-  function uni(gl, name, ...v) {
-    const loc = gl.getUniformLocation(gl.getParameter(gl.CURRENT_PROGRAM), name);
-    if (!loc) return;
-    if (v.length === 1) gl.uniform1f(loc, v[0]);
-    else if (v.length === 2) gl.uniform2f(loc, v[0], v[1]);
-    else gl.uniform1i(loc, v[0]);
+  // uniform helpers (IMPORTANT: loc can be 0!)
+  function uniLoc(gl, prog, name) {
+    const loc = gl.getUniformLocation(prog, name);
+    return loc; // can be null OR 0/other
+  }
+  function uni1(gl, prog, name, v) {
+    const loc = uniLoc(gl, prog, name);
+    if (loc === null) return;
+    gl.uniform1f(loc, v);
+  }
+  function uni2(gl, prog, name, a, b) {
+    const loc = uniLoc(gl, prog, name);
+    if (loc === null) return;
+    gl.uniform2f(loc, a, b);
+  }
+  function uniS(gl, prog, name, unit) {
+    const loc = uniLoc(gl, prog, name);
+    if (loc === null) return;
+    gl.uniform1i(loc, unit);
   }
 
   const VERT = `
@@ -228,24 +275,28 @@
       vec2 c = vec2(0.5);
       vec2 d = vUv - c;
       float r = length(d);
-      vec2 dir = normalize(d+0.0001);
-      vec2 px = 1.0/uRes;
+      vec2 dir = normalize(d + 0.00001);
+      vec2 px = 1.0 / uRes;
 
-      float edge = smoothstep(0.25,0.9,r);
-      float blur = edge * (uField*0.4 + uEdge*0.6);
+      float edge = smoothstep(0.25, 0.92, r);
 
-      vec2 ca = dir * uCA * edge * 0.002;
+      // chromatic aberration
+      vec2 ca = dir * uCA * edge * 0.0022;
 
       vec3 col = vec3(
-        texture2D(uTex, vUv+ca).r,
+        texture2D(uTex, vUv + ca).r,
         texture2D(uTex, vUv).g,
-        texture2D(uTex, vUv-ca).b
+        texture2D(uTex, vUv - ca).b
       );
 
-      vec2 smear = dir * px * uComa * edge * 6.0;
-      col = mix(col, texture2D(uTex, vUv+smear).rgb, blur);
+      // coma smear (very mild, directional)
+      float blur = edge * (uField * 0.35 + uEdge * 0.65);
+      vec2 smear = dir * px * uComa * edge * 7.0;
+      vec3 smeared = texture2D(uTex, vUv + smear).rgb;
 
-      gl_FragColor = vec4(col,1.);
+      col = mix(col, smeared, blur);
+
+      gl_FragColor = vec4(col, 1.0);
     }
   `;
 
@@ -257,13 +308,16 @@
     uniform float uWarm;
 
     void main(){
-      vec3 c = texture2D(uTex,vUv).rgb;
-      float y = dot(c,vec3(.21,.72,.07));
-      float m = smoothstep(.8,1.,y)*uBloom;
-      vec3 b = c*m;
-      b.r*=1.+.6*uWarm;
-      b.g*=1.+.2*uWarm;
-      gl_FragColor = vec4(b,1.);
+      vec3 c = texture2D(uTex, vUv).rgb;
+      float y = dot(c, vec3(0.2126, 0.7152, 0.0722));
+      float m = smoothstep(0.80, 1.00, y) * uBloom;
+      vec3 b = c * m;
+
+      // warm tint
+      b.r *= 1.0 + 0.6 * uWarm;
+      b.g *= 1.0 + 0.2 * uWarm;
+
+      gl_FragColor = vec4(b, 1.0);
     }
   `;
 
@@ -272,10 +326,13 @@
     varying vec2 vUv;
     uniform sampler2D uTex;
     uniform sampler2D uBloomTex;
+
     void main(){
-      vec3 a = texture2D(uTex,vUv).rgb;
-      vec3 b = texture2D(uBloomTex,vUv).rgb;
-      gl_FragColor = vec4(1.-(1.-a)*(1.-b),1.);
+      vec3 a = texture2D(uTex, vUv).rgb;
+      vec3 b = texture2D(uBloomTex, vUv).rgb;
+      // screen blend
+      vec3 outc = 1.0 - (1.0 - a) * (1.0 - b);
+      gl_FragColor = vec4(outc, 1.0);
     }
   `;
 })();
