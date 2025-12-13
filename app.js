@@ -467,6 +467,53 @@ function bind(){
 
   safeOn("exportSplit","click", exportSplit);
 
+   const overlay = document.getElementById("detailOverlay");
+const cBefore = document.getElementById("detailBefore");
+const cAfter  = document.getElementById("detailAfter");
+const bCtx = cBefore.getContext("2d");
+const aCtx = cAfter.getContext("2d");
+
+const ZOOM = 2.5;
+const SIZE = 260;
+
+cBefore.width = cBefore.height = SIZE;
+cAfter.width  = cAfter.height  = SIZE;
+
+function updateDetail(e){
+  if(!srcImg) return;
+
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+
+  const nx = mx / rect.width;
+  const ny = my / rect.height;
+
+  const sx = nx * srcW;
+  const sy = ny * srcH;
+
+  const sw = SIZE / ZOOM;
+  const sh = SIZE / ZOOM;
+
+  const dx = Math.max(0, Math.min(srcW - sw, sx - sw/2));
+  const dy = Math.max(0, Math.min(srcH - sh, sy - sh/2));
+
+  // before
+  bCtx.clearRect(0,0,SIZE,SIZE);
+  bCtx.drawImage(srcImg, dx, dy, sw, sh, 0, 0, SIZE, SIZE);
+
+  // after
+  aCtx.clearRect(0,0,SIZE,SIZE);
+  aCtx.drawImage(canvas, dx, dy, sw, sh, 0, 0, SIZE, SIZE);
+
+  overlay.style.left = `${e.clientX + 20}px`;
+  overlay.style.top  = `${e.clientY + 20}px`;
+}
+
+canvas.addEventListener("mouseenter", ()=> overlay.classList.remove("hidden"));
+canvas.addEventListener("mouseleave", ()=> overlay.classList.add("hidden"));
+canvas.addEventListener("mousemove", updateDetail);
+
   // Shortcuts:
   // P = fullscreen
   // D = detail viewer
