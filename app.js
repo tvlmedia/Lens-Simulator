@@ -1,23 +1,45 @@
-/* TVL Lens Emulator — NO SLIDERS (Clean Fullscreen + Detail Overlay)
+/* TVL Lens Emulator — Sliders + Split-screen
    - Upload image
    - Choose lens profile (gl_profiles.json)
+   - Live tweak via sliders (range + number)
+   - Split-screen BEFORE/AFTER toggle (button + "S")
    - Render via WebGL (gl.js / TVLGL)
    - Export PNG + split
    + Fullscreen button + "P"
-   + Detail viewer overlay (Before/After) + "D"
+   + Detail viewer overlay (Before/After zoom) + "D"
 */
 
 const $ = (id) => document.getElementById(id);
 function safeOn(id, evt, fn){ const el = $(id); if(el) el.addEventListener(evt, fn); }
 
-const canvas = $("canvas");
+const canvas = $("canvas");        // AFTER
 const ctx2d = canvas.getContext("2d", { willReadFrequently: true });
+
+const beforeCanvas = $("beforeCanvas"); // BEFORE (split)
+const beforeCtx = beforeCanvas ? beforeCanvas.getContext("2d", { willReadFrequently: true }) : null;
 
 let srcImg = null;
 let srcW = 0, srcH = 0;
 
 let profiles = {};
 let activeName = "";
+let liveParams = {};     // mutable copy of active profile
+let splitOn = false;
+
+// ---------- param definitions ----------
+const PARAMS = [
+  { key:"fieldCurvature", label:"Field curvature", min:0,   max:1.2, step:0.01 },
+  { key:"edgeSoftness",   label:"Edge softness",   min:0,   max:1.0, step:0.01 },
+  { key:"coma",           label:"Coma",           min:0,   max:1.0, step:0.01 },
+  { key:"comaAnamorph",   label:"Coma anamorph",  min:0,   max:1.0, step:0.01 },
+  { key:"bloom",          label:"Bloom",          min:0,   max:1.0, step:0.01 },
+  { key:"bloomWarmth",    label:"Bloom warmth",   min:-1,  max:1.0, step:0.01 },
+  { key:"ca",             label:"CA",             min:0,   max:1.0, step:0.01 },
+  { key:"vignette",       label:"Vignette",       min:0,   max:1.2, step:0.01 },
+  { key:"asymX",          label:"Asym X",         min:-1,  max:1.0, step:0.01 },
+  { key:"asymY",          label:"Asym Y",         min:-1,  max:1.0, step:0.01 },
+  { key:"veil",           label:"Veil",           min:0,   max:1.0, step:0.01 },
+];
 
 // ---------- UI helpers ----------
 function setStatus(text, good=false){
@@ -26,16 +48,25 @@ function setStatus(text, good=false){
   pill.textContent = text;
   pill.style.color = good ? "var(--good)" : "";
 }
+
 function setDimsText(){
   const el = $("dimPill");
   if(el) el.textContent = srcImg ? `${srcW}×${srcH}` : "—";
 }
+
 function resizeCanvas(w,h){
-  canvas.width = w;
-  canvas.height = h;
+  canvas.width = w;  canvas.height = h;
+  if(beforeCanvas){
+    beforeCanvas.width = w; beforeCanvas.height = h;
+  }
 }
 
-// ---------- load profiles ----------
+function clamp(v, min, max){
+  if(Number.isNaN(v)) return min;
+  return Math.max(min, Math.min(max, v));
+}
+
+// ---------- profiles ----------
 function loadProfiles(){
   return fetch("gl_profiles.json", { cache: "no-store" })
     .then(r => {
@@ -46,7 +77,7 @@ function loadProfiles(){
       profiles = j || {};
       populateSelect();
       setStatus("Profiles loaded", true);
-      render();
+      loadLens(activeName);
     })
     .catch((e) => {
       console.error("loadProfiles error:", e);
@@ -82,6 +113,94 @@ function populateSelect(){
   sel.value = activeName;
 }
 
+function loadLens(name){
+  activeName = name || "";
+  const prof = (activeName && profiles[activeName]) ? profiles[activeName] : {};
+  liveParams = structuredClone(prof || {});
+  ensureParamsDefaults();
+  updateParamsUIFromLive();
+  render();
+}
+
+function ensureParamsDefaults(){
+  // make sure all keys exist in liveParams so UI isn't NaN
+  PARAMS.forEach(d=>{
+    if(liveParams[d.key] === undefined || liveParams[d.key] === null){
+      liveParams[d.key] = (d.min + d.max) * 0.5;
+    }
+  });
+}
+
+// ---------- param UI ----------
+function buildParamsPanel(){
+  const panel = $("paramsPanel");
+  if(!panel) return;
+  panel.innerHTML = "";
+
+  PARAMS.forEach(def=>{
+    const row = document.createElement("div");
+    row.className = "paramRow";
+
+    const lab = document.createElement("label");
+    lab.textContent = def.label;
+
+    const range = document.createElement("input");
+    range.type = "range";
+    range.min = String(def.min);
+    range.max = String(def.max);
+    range.step = String(def.step);
+    range.dataset.param = def.key;
+
+    const num = document.createElement("input");
+    num.type = "number";
+    num.min = String(def.min);
+    num.max = String(def.max);
+    num.step = String(def.step);
+    num.dataset.param = def.key;
+
+    // shared handler
+    const onInput = (e)=>{
+      const key = e.target.dataset.param;
+      const d = PARAMS.find(x=>x.key===key);
+      if(!d) return;
+
+      const raw = parseFloat(e.target.value);
+      const v = clamp(raw, d.min, d.max);
+
+      liveParams[key] = v;
+
+      // sync both controls
+      const others = panel.querySelectorAll(`[data-param="${key}"]`);
+      others.forEach(el=>{
+        if(el !== e.target) el.value = String(v);
+      });
+
+      render();
+    };
+
+    range.addEventListener("input", onInput);
+    num.addEventListener("input", onInput);
+
+    row.appendChild(lab);
+    row.appendChild(range);
+    row.appendChild(num);
+    panel.appendChild(row);
+  });
+
+  updateParamsUIFromLive();
+}
+
+function updateParamsUIFromLive(){
+  const panel = $("paramsPanel");
+  if(!panel) return;
+  PARAMS.forEach(def=>{
+    const v = clamp(parseFloat(liveParams[def.key]), def.min, def.max);
+    panel.querySelectorAll(`[data-param="${def.key}"]`).forEach(el=>{
+      el.value = String(v);
+    });
+  });
+}
+
 // ---------- file upload ----------
 function onFile(file){
   if(!file) return;
@@ -111,41 +230,71 @@ function onFile(file){
   img.src = url;
 }
 
-// ---------- rendering ----------
-function drawBefore(){
-  if(!srcImg) return;
-  ctx2d.setTransform(1,0,0,1,0,0);
-  ctx2d.clearRect(0,0,srcW,srcH);
-  ctx2d.drawImage(srcImg, 0, 0);
+// ---------- drawing ----------
+function drawBeforeTo(ctx){
+  if(!srcImg || !ctx) return;
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.clearRect(0,0,srcW,srcH);
+  ctx.drawImage(srcImg, 0, 0);
 }
 
-function render(){
+function drawBeforeSingle(){
+  drawBeforeTo(ctx2d);
+}
+
+function drawBeforeSplit(){
+  if(beforeCtx) drawBeforeTo(beforeCtx);
+}
+
+function drawAfter(){
   if(!srcImg) return;
 
-  if($("showBefore")?.checked){
-    drawBefore();
-    setStatus("Before", true);
-    updateDetail();
-    return;
-  }
-
-  const prof = (activeName && profiles[activeName]) ? profiles[activeName] : {};
-
   if(window.TVLGL && typeof TVLGL.render === "function"){
-    const ok = TVLGL.render(srcImg, prof, canvas);
+    const ok = TVLGL.render(srcImg, liveParams || {}, canvas);
     if(ok){
-      setStatus(`Lens: ${activeName || "—"}`, true);
+      setStatus(`Lens: ${activeName || "—"} (live)`, true);
       updateDetail();
-      return;
+      return true;
     }
     console.warn("TVLGL.render returned false (WebGL failed).");
   } else {
     console.warn("TVLGL not found. Check that gl.js is loaded before app.js.");
   }
 
-  drawBefore();
+  drawBeforeSingle();
   setStatus("WebGL niet beschikbaar → toon originele", false);
   updateDetail();
+  return false;
+}
+
+function render(){
+  if(!srcImg) return;
+
+  // split: always keep a clean BEFORE on the left
+  if(splitOn){
+    drawBeforeSplit();
+
+    // right side: allow "showBefore" as a debug option (rarely useful)
+    if($("showBefore")?.checked){
+      drawBeforeSingle();
+      setStatus("Split (Before/Before)", true);
+      updateDetail();
+      return;
+    }
+
+    drawAfter();
+    return;
+  }
+
+  // single view
+  if($("showBefore")?.checked){
+    drawBeforeSingle();
+    setStatus("Before", true);
+    updateDetail();
+    return;
+  }
+
+  drawAfter();
 }
 
 // ---------- exports ----------
@@ -195,7 +344,7 @@ function exportSplit(){
 }
 
 // =====================================================
-// Fullscreen (ONE implementation)
+// Fullscreen
 // =====================================================
 function getFullscreenTarget(){
   return document.querySelector(".viewerInner") || document.querySelector(".viewer") || canvas;
@@ -212,23 +361,28 @@ function toggleFullscreen(){
   }
 }
 
-function ensureFullscreenButton(){
-  const actions = document.querySelector(".actions");
-  if(!actions) return;
-  if($("fullscreenBtn")) return;
-
-  const btn = document.createElement("button");
-  btn.id = "fullscreenBtn";
-  btn.className = "btn ghost";
-  btn.textContent = "Fullscreen";
-  btn.addEventListener("click", toggleFullscreen);
-
-  const exportPng = $("exportPng");
-  if(exportPng && exportPng.parentElement === actions){
-    actions.insertBefore(btn, exportPng);
-  } else {
-    actions.appendChild(btn);
+// =====================================================
+// Split toggle
+// =====================================================
+function setSplit(on){
+  splitOn = !!on;
+  const vi = $("viewerInner");
+  if(vi){
+    vi.classList.toggle("splitOn", splitOn);
+    vi.classList.toggle("splitOff", !splitOn);
   }
+  if(splitOn){
+    const cb = $("showBefore");
+    if(cb) cb.checked = false; // keep sane: split is already before/after
+    setStatus("Split ON", true);
+  }else{
+    setStatus("Split OFF", true);
+  }
+  render();
+}
+
+function toggleSplit(){
+  setSplit(!splitOn);
 }
 
 // =====================================================
@@ -236,8 +390,8 @@ function ensureFullscreenButton(){
 // =====================================================
 let detail = {
   on: false,
-  zoom: 2.2,     // minder ingezoomd
-  size: 320,     // grotere vierkantjes
+  zoom: 2.2,
+  size: 320,
   x: 0.5,
   y: 0.5,
   overlay: null,
@@ -359,12 +513,12 @@ function drawDetailCrops(){
   const sx = Math.max(0, Math.min(srcW - cropW, cx - Math.floor(cropW/2)));
   const sy = Math.max(0, Math.min(srcH - cropH, cy - Math.floor(cropH/2)));
 
-  // BEFORE
+  // BEFORE (always from source image)
   detail.ctxB.imageSmoothingEnabled = true;
   detail.ctxB.clearRect(0,0,outW,outH);
   detail.ctxB.drawImage(srcImg, sx, sy, cropW, cropH, 0, 0, outW, outH);
 
-  // AFTER (from current rendered canvas)
+  // AFTER (from rendered canvas)
   detail.ctxA.imageSmoothingEnabled = true;
   detail.ctxA.clearRect(0,0,outW,outH);
   detail.ctxA.drawImage(canvas, sx, sy, cropW, cropH, 0, 0, outW, outH);
@@ -403,16 +557,44 @@ function bindDetailTracking(){
 }
 
 // =====================================================
+// Utility buttons
+// =====================================================
+function resetParams(){
+  if(!activeName || !profiles[activeName]) return;
+  liveParams = structuredClone(profiles[activeName]);
+  ensureParamsDefaults();
+  updateParamsUIFromLive();
+  render();
+  setStatus("Reset naar preset", true);
+}
+
+async function copyParams(){
+  try{
+    const txt = JSON.stringify(liveParams, null, 2);
+    await navigator.clipboard.writeText(txt);
+    setStatus("JSON gekopieerd", true);
+  }catch(e){
+    console.warn("clipboard failed:", e);
+    setStatus("Kon JSON niet kopiëren", false);
+  }
+}
+
+// =====================================================
 // Bind
 // =====================================================
 function bind(){
-  ensureFullscreenButton();
+  buildParamsPanel();
   ensureDetailOverlay();
   bindDetailTracking();
 
   safeOn("fileInput","change",(e)=> onFile(e.target.files && e.target.files[0]));
-  safeOn("presetSelect","change",(e)=> { activeName = e.target.value; render(); });
-  safeOn("showBefore","change", render);
+
+  safeOn("presetSelect","change",(e)=> loadLens(e.target.value));
+
+  safeOn("showBefore","change", ()=>{
+    // if user toggles before while in split, keep it allowed but render again
+    render();
+  });
 
   safeOn("randomizeFlare","click", ()=>{
     if(window.TVLGL && typeof TVLGL.randomizeFlare === "function") TVLGL.randomizeFlare();
@@ -426,6 +608,12 @@ function bind(){
 
   safeOn("exportSplit","click", exportSplit);
 
+  safeOn("fullscreenBtn","click", toggleFullscreen);
+  safeOn("splitBtn","click", toggleSplit);
+
+  safeOn("resetParams","click", resetParams);
+  safeOn("copyParams","click", copyParams);
+
   // Shortcuts (ONE listener)
   window.addEventListener("keydown", (e)=>{
     const k = (e.key || "").toLowerCase();
@@ -438,6 +626,11 @@ function bind(){
     if(k === "d"){
       e.preventDefault();
       toggleDetail();
+    }
+
+    if(k === "s"){
+      e.preventDefault();
+      toggleSplit();
     }
 
     if(k === "escape"){
