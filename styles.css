@@ -113,6 +113,11 @@ canvas{
   object-fit: contain;
   background: #000;
 }
+.viewerInner{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
 .empty{
   position:absolute; inset:0;
   display:flex; align-items:center; justify-content:center;
