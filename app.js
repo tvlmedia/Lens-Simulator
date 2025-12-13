@@ -588,4 +588,6 @@ function bind(){
   updateUIReadouts();
 }
 
-loadPresets().then(bind);
+document.addEventListener("DOMContentLoaded", () => {
+  loadPresets().then(bind);
+});
