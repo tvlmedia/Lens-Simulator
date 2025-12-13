@@ -169,3 +169,24 @@ canvas{
   background:#000;
   border-radius:12px;
 }
+.hidden{ display:none !important; }
+
+.detail{
+  position:fixed;
+  inset:0;
+  z-index:9999;
+  display:flex;
+  gap:18px;
+  align-items:center;
+  justify-content:center;
+  padding:24px;
+  background:rgba(0,0,0,.92);
+}
+
+.detail canvas{
+  width:360px;
+  height:360px;
+  background:#000;
+  border:1px solid rgba(255,255,255,.12);
+  border-radius:14px;
+}
