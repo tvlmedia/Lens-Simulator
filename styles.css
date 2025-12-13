@@ -151,3 +151,21 @@ canvas{
   .panel{order:2}
   .viewer{order:1; min-height: 55vh}
 }
+.detail{
+  position:fixed;
+  inset:0;
+  background:rgba(0,0,0,.92);
+  display:flex;
+  gap:20px;
+  justify-content:center;
+  align-items:center;
+  z-index:9999;
+}
+.detail.hidden{display:none}
+
+.detail canvas{
+  width:320px;
+  height:320px;
+  background:#000;
+  border-radius:12px;
+}
