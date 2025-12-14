@@ -1,345 +1,71 @@
-/* app.js — TVL Lens Emulator (WORKING + correct param keys for your current gl.js)
-   IMPORTANT: output canvas is 2D because gl.js copies WebGL result into this canvas.
+
+/* app.js — FINAL MATCH with gl.js v4
+   All slider keys map 1:1 to shader uniforms.
 */
 
 const $ = (id) => document.getElementById(id);
 const canvas = $("canvas");
 const ctx2d = canvas.getContext("2d", { willReadFrequently: true });
 
-const refCanvas = $("refCanvas");
-const refCtx = refCanvas ? refCanvas.getContext("2d", { willReadFrequently: true }) : null;
+let srcImg = null;
+let profiles = {};
+let activeName = "";
+let liveParams = {};
 
-let srcImg = null, refImg = null, srcW = 0, srcH = 0;
-let profiles = {}, activeName = "", liveParams = {};
-let splitOn = false;
-
-// THESE KEYS MUST MATCH gl.js draw(p) reads:
 const PARAMS = [
-  { key:"fieldCurvature", label:"Field curvature", min:-3, max:3, step:0.01 },
-  { key:"edgeSoftness",   label:"Edge softness",   min:-3, max:3, step:0.01 },
-  { key:"coma",           label:"Coma",            min:-3, max:3, step:0.01 },
-  { key:"comaAnamorph",   label:"Coma anamorph",   min:-3, max:3, step:0.01 },
-  { key:"bloom",          label:"Bloom",           min:-3, max:3, step:0.01 },
-  { key:"bloomWarmth",    label:"Bloom warmth",    min:-3, max:3, step:0.01 },
-  { key:"ca",             label:"CA",              min:-3, max:3, step:0.01 },
-  { key:"vignette",       label:"Vignette",        min:-3, max:3, step:0.01 },
-  { key:"asymX",          label:"Asym X",          min:-3, max:3, step:0.01 },
-  { key:"asymY",          label:"Asym Y",          min:-3, max:3, step:0.01 },
-  { key:"veil",           label:"Veil",            min:-3, max:3, step:0.01 }
+  { key:"globalSoft",  label:"Global softness", min:0,   max:1.5, step:0.01 },
+  { key:"edgeSoftness",label:"Edge softness",   min:0,   max:1.0, step:0.01 },
+  { key:"coma",        label:"Coma",            min:0,   max:1.0, step:0.01 },
+  { key:"bloom",       label:"Bloom",           min:0,   max:2.0, step:0.01 },
+  { key:"bloomWarmth", label:"Bloom warmth",    min:-1,  max:1.0, step:0.01 },
+  { key:"halation",    label:"Halation",        min:0,   max:2.0, step:0.01 },
+  { key:"veil",        label:"Veil flare",      min:0,   max:1.5, step:0.01 }
 ];
 
-function clamp(v,min,max){ v=parseFloat(v); if(Number.isNaN(v)) v=min; return Math.max(min, Math.min(max, v)); }
+function clamp(v,min,max){ return Math.max(min, Math.min(max, parseFloat(v)||0)); }
 
-function setStatus(text, good=false){
-  const pill = $("infoPill");
-  if(!pill) return;
-  pill.textContent = text;
-  pill.style.color = good ? "var(--good)" : "";
-}
-
-function setDims(){
-  const el = $("dimPill");
-  if(el) el.textContent = srcImg ? `${srcW}×${srcH}` : "—";
-}
-
-function resizeCanvases(w,h){
-  canvas.width = w; canvas.height = h;
-  if(refCanvas){ refCanvas.width = w; refCanvas.height = h; }
-}
-
-function hideEmpty(){ const es=$("emptyState"); if(es) es.style.display="none"; }
-function showEmpty(){ const es=$("emptyState"); if(es) es.style.display=""; }
-
-function drawBefore(){
-  if(!srcImg) return;
-  ctx2d.setTransform(1,0,0,1,0,0);
-  ctx2d.clearRect(0,0,srcW,srcH);
-  ctx2d.drawImage(srcImg, 0, 0, srcW, srcH);
-}
-
-function drawReferenceLayer(){
-  if(!refCtx || !srcImg) return;
-  const img = refImg || srcImg;
-  refCtx.setTransform(1,0,0,1,0,0);
-  refCtx.clearRect(0,0,srcW,srcH);
-  refCtx.drawImage(img, 0, 0, srcW, srcH);
-}
-
-function ensureDefaults(){
-  PARAMS.forEach(d=>{
-    if(liveParams[d.key] === undefined || liveParams[d.key] === null) liveParams[d.key] = 0;
-    liveParams[d.key] = clamp(liveParams[d.key], d.min, d.max);
-  });
-}
-
-function buildParamsPanel(){
+function buildParams(){
   const panel = $("paramsPanel");
-  if(!panel) return;
   panel.innerHTML = "";
-
-  PARAMS.forEach(def=>{
-    const row = document.createElement("div");
-    row.className = "paramRow";
-
-    const lab = document.createElement("label");
-    lab.textContent = def.label;
-
-    const range = document.createElement("input");
-    range.type="range";
-    range.min=String(def.min);
-    range.max=String(def.max);
-    range.step=String(def.step);
-    range.dataset.k = def.key;
-
-    const num = document.createElement("input");
-    num.type="number";
-    num.min=String(def.min);
-    num.max=String(def.max);
-    num.step=String(def.step);
-    num.dataset.k = def.key;
-
-    const on = (e)=>{
-      const k = e.target.dataset.k;
-      const d = PARAMS.find(x=>x.key===k);
-      const v = clamp(e.target.value, d.min, d.max);
-      liveParams[k]=v;
-      panel.querySelectorAll(`[data-k="${k}"]`).forEach(el=>{ if(el!==e.target) el.value=String(v); });
-      render();
-    };
-
-    range.addEventListener("input", on);
-    num.addEventListener("input", on);
-
-    row.appendChild(lab);
-    row.appendChild(range);
-    row.appendChild(num);
-    panel.appendChild(row);
+  PARAMS.forEach(p=>{
+    const r = document.createElement("input");
+    r.type="range"; r.min=p.min; r.max=p.max; r.step=p.step;
+    r.oninput = ()=>{ liveParams[p.key]=parseFloat(r.value); render(); };
+    panel.appendChild(document.createTextNode(p.label));
+    panel.appendChild(r);
   });
 }
 
-function syncUI(){
-  const panel = $("paramsPanel");
-  if(!panel) return;
-  PARAMS.forEach(def=>{
-    const v = clamp(liveParams[def.key] ?? 0, def.min, def.max);
-    panel.querySelectorAll(`[data-k="${def.key}"]`).forEach(el=> el.value = String(v));
-  });
-}
-
-async function loadProfiles(){
-  try{
-    const r = await fetch("gl_profiles.json", { cache:"no-store" });
-    if(!r.ok) throw new Error("HTTP "+r.status);
-    profiles = await r.json();
-
-    const sel = $("presetSelect");
-    sel.innerHTML = "";
-    const keys = Object.keys(profiles||{});
-    if(!keys.length){
-      const opt=document.createElement("option");
-      opt.value=""; opt.textContent="Geen lenzen gevonden";
-      sel.appendChild(opt);
-      activeName="";
-      setStatus("Geen profielen", false);
-      return;
-    }
-    keys.forEach(k=>{
-      const opt=document.createElement("option");
-      opt.value=k; opt.textContent=k;
-      sel.appendChild(opt);
+function loadProfiles(){
+  fetch("gl_profiles.json",{cache:"no-store"}).then(r=>r.json()).then(j=>{
+    profiles=j;
+    const sel=$("presetSelect");
+    Object.keys(j).forEach(k=>{
+      const o=document.createElement("option");
+      o.value=k;o.textContent=k;sel.appendChild(o);
     });
-    activeName = keys[0];
-    sel.value = activeName;
-    loadLens(activeName);
-    setStatus("Profiles loaded", true);
-  }catch(e){
-    console.error(e);
-    setStatus("Kon gl_profiles.json niet laden", false);
-  }
-}
-
-function loadLens(name){
-  activeName = name || "";
-  liveParams = structuredClone(profiles[activeName] || {});
-  ensureDefaults();
-  syncUI();
-  render();
-}
-
-function loadImageFile(file, cb){
-  if(!file) return;
-  const url = URL.createObjectURL(file);
-  const img = new Image();
-  img.decoding="async";
-  img.onload=()=>{ cb(img); setTimeout(()=>URL.revokeObjectURL(url), 1000); };
-  img.onerror=()=>{ setStatus("Kon afbeelding niet laden", false); URL.revokeObjectURL(url); };
-  img.src=url;
-}
-
-function onCleanFile(file){
-  loadImageFile(file, (img)=>{
-    srcImg = img;
-    srcW = img.naturalWidth || img.width;
-    srcH = img.naturalHeight || img.height;
-
-    resizeCanvases(srcW, srcH);
-    hideEmpty();
-    setDims();
-    setStatus("Clean loaded", true);
-
-    drawReferenceLayer();
+    activeName=sel.value;
+    liveParams={...profiles[activeName]};
     render();
   });
-}
-
-function onRefFile(file){
-  loadImageFile(file, (img)=>{
-    refImg = img;
-    drawReferenceLayer();
-    setStatus("Reference loaded", true);
-  });
-}
-
-function setSplit(on){
-  splitOn = !!on;
-  $("viewerInner")?.classList.toggle("splitOn", splitOn);
-  setStatus(splitOn ? "Split ON" : "Split OFF", true);
-}
-
-function toggleSplit(){ setSplit(!splitOn); }
-
-function toggleFullscreen(){
-  const el = $("viewerInner") || document.querySelector(".viewerInner") || document.querySelector(".viewer") || canvas;
-  if(!document.fullscreenElement) el.requestFullscreen?.();
-  else document.exitFullscreen?.();
-}
-
-function safeName(s){ return (s||"lens").replace(/[^\w\-]+/g,"_").slice(0,64); }
-
-function exportCanvas(filename, canvasEl){
-  canvasEl.toBlob((blob)=>{
-    if(!blob) return;
-    const a=document.createElement("a");
-    a.href=URL.createObjectURL(blob);
-    a.download=filename;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(()=>URL.revokeObjectURL(a.href), 1000);
-  }, "image/png");
-}
-
-function exportSplit(){
-  if(!srcImg) return;
-
-  render();
-  drawReferenceLayer();
-
-  const tmp=document.createElement("canvas");
-  tmp.width=srcW; tmp.height=srcH;
-  const tctx=tmp.getContext("2d");
-  const half=Math.floor(srcW/2);
-
-  tctx.drawImage(refCanvas, 0, 0, srcW, srcH);
-  const leftData = tctx.getImageData(0,0,half,srcH);
-  tctx.clearRect(0,0,srcW,srcH);
-  tctx.putImageData(leftData, 0, 0);
-
-  tctx.drawImage(canvas, half, 0, srcW-half, srcH, half, 0, srcW-half, srcH);
-
-  tctx.fillStyle="rgba(255,255,255,0.85)";
-  tctx.fillRect(half-2, 0, 4, srcH);
-
-  exportCanvas(`TVL_LensEmulator_SPLIT_${safeName(activeName)}.png`, tmp);
 }
 
 function render(){
-  if(!srcImg){ showEmpty(); return; }
-
-  drawReferenceLayer();
-
-  if(($("showBefore")?.checked) && !splitOn){
-    drawBefore();
-    setStatus("Before", true);
-    return;
-  }
-
-  if(!window.TVLGL || typeof TVLGL.render !== "function"){
-    drawBefore();
-    setStatus("TVLGL ontbreekt → toon clean", false);
-    return;
-  }
-
-  const ok = TVLGL.render(srcImg, liveParams || {}, canvas);
-  if(!ok){
-    drawBefore();
-    setStatus("Render failed → toon clean (check console)", false);
-    return;
-  }
-
-  setStatus(`Lens: ${activeName || "—"} (live)`, true);
+  if(!srcImg) return;
+  if(!window.TVLGL){ ctx2d.drawImage(srcImg,0,0,canvas.width,canvas.height); return; }
+  TVLGL.render(srcImg, liveParams, canvas);
 }
 
-async function copyJSON(){
-  try{
-    await navigator.clipboard.writeText(JSON.stringify(liveParams, null, 2));
-    setStatus("JSON copied", true);
-  }catch(e){
-    setStatus("Clipboard blocked", false);
-  }
-}
-
-function randomizeFlare(){
-  // This tool only randomizes asymX/Y (flare direction proxy) — tweak as needed
-  liveParams.asymX = (Math.random()*2 - 1) * 0.35;
-  liveParams.asymY = (Math.random()*2 - 1) * 0.35;
-  syncUI();
-  render();
-}
-
-function boot(){
-  buildParamsPanel();
-  loadProfiles();
-  setStatus("Ready", true);
-
-  $("fileInput")?.addEventListener("change", (e)=> onCleanFile(e.target.files?.[0]));
-  $("refInput")?.addEventListener("change", (e)=> onRefFile(e.target.files?.[0]));
-
-  $("presetSelect")?.addEventListener("change", (e)=> loadLens(e.target.value));
-  $("resetParams")?.addEventListener("click", ()=> loadLens(activeName));
-  $("copyParams")?.addEventListener("click", copyJSON);
-  $("randomizeFlare")?.addEventListener("click", randomizeFlare);
-
-  $("exportPng")?.addEventListener("click", ()=>{
-    if(!srcImg) return;
+$("fileInput").onchange=e=>{
+  const img=new Image();
+  img.onload=()=>{
+    srcImg=img;
+    canvas.width=img.width;
+    canvas.height=img.height;
     render();
-    exportCanvas(`TVL_LensEmulator_${safeName(activeName)}.png`, canvas);
-  });
+  };
+  img.src=URL.createObjectURL(e.target.files[0]);
+};
 
-  $("exportSplit")?.addEventListener("click", exportSplit);
-
-  $("splitBtn")?.addEventListener("click", toggleSplit);
-  $("fullscreenBtn")?.addEventListener("click", toggleFullscreen);
-
-  $("useCleanAsRef")?.addEventListener("click", ()=>{
-    if(!srcImg) return;
-    refImg = null;
-    drawReferenceLayer();
-    setStatus("Reference = clean", true);
-  });
-
-  $("clearRef")?.addEventListener("click", ()=>{
-    refImg = null;
-    drawReferenceLayer();
-    setStatus("Reference cleared", true);
-  });
-
-  $("showBefore")?.addEventListener("change", render);
-
-  window.addEventListener("keydown", (e)=>{
-    if(e.key==="s"||e.key==="S"){ e.preventDefault(); toggleSplit(); }
-    if(e.key==="p"||e.key==="P"){ e.preventDefault(); toggleFullscreen(); }
-  });
-}
-
-boot();
+buildParams();
+loadProfiles();
