@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>TVL Lens Emulator</title>
+  <title>TVL Lens Emulator (MVP)</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -12,12 +12,11 @@
       <div class="dot"></div>
       <div>
         <div class="title">TVL Lens Emulator</div>
-        <div class="subtitle">Upload clean → kies lens → tweak → match reference</div>
+        <div class="subtitle">Upload clean → kies lens → export</div>
       </div>
     </div>
     <div class="actions">
       <a class="btn ghost" href="https://tvlrental.nl" target="_blank" rel="noreferrer">tvlrental.nl</a>
-      <button id="splitBtn" class="btn ghost" title="Split (Reference/After) (S)">Split</button>
       <button id="exportPng" class="btn">Export PNG</button>
       <button id="exportSplit" class="btn">Export Split</button>
       <button id="fullscreenBtn" class="btn ghost">Fullscreen</button>
@@ -27,19 +26,9 @@
   <main class="wrap">
     <section class="panel">
       <div class="block">
-        <label class="label">1) Upload afbeelding (clean / source)</label>
+        <label class="label">1) Upload afbeelding (clean)</label>
         <input id="fileInput" type="file" accept="image/*" />
-        <div class="hint">Deze afbeelding wordt door de emulation gehaald (AFTER).</div>
-      </div>
-
-      <div class="block">
-        <label class="label">1b) Upload reference (target look)</label>
-        <input id="refInput" type="file" accept="image/*" />
-        <div class="row tinyActions">
-          <button id="useCleanAsRef" class="btn ghost" title="Gebruik clean als reference">Use clean as reference</button>
-          <button id="clearRef" class="btn ghost" title="Reference verwijderen">Clear reference</button>
-        </div>
-        <div class="hint small">In split-mode: <b>links</b> reference, <b>rechts</b> emulation. (Als je geen reference uploadt, gebruikt ie de clean als reference.)</div>
+        <div class="hint">Tip: shots met highlights & bokeh geven het meest “lens”-gevoel.</div>
       </div>
 
       <div class="block">
@@ -52,53 +41,45 @@
       </div>
 
       <div class="block">
-        <label class="label">3) Live tweak (sliders)</label>
-        <div class="row tinyActions">
-          <button id="resetParams" class="btn ghost" title="Reset naar preset">Reset</button>
-          <button id="copyParams" class="btn ghost" title="Kopieer JSON naar klembord">Copy JSON</button>
+        <label class="label">3) Preset toegepast</label>
+        <div class="hint">
+          Geen sliders: de gekozen lenzenset bepaalt de volledige look. Upload → kies lens → export.
         </div>
-
-        <div id="paramsPanel" class="paramsPanel"></div>
 
         <div class="row toggles">
           <label class="toggle">
             <input id="showBefore" type="checkbox" />
-            <span>Toon “before” (single view)</span>
+            <span>Toon “before”</span>
           </label>
           <label class="toggle">
             <input id="autoFit" type="checkbox" checked />
             <span>Auto-fit viewer</span>
           </label>
         </div>
-
-        <div class="hint small">
-          Shortcuts: <span class="mono">S</span> split, <span class="mono">D</span> detail viewer, <span class="mono">P</span> fullscreen.
-        </div>
       </div>
     </section>
 
     <section class="viewer">
-      <div class="viewerInner" id="viewerInner">
-        <div class="stage" id="stage">
-          <canvas id="canvas"></canvas>
-          <canvas id="refCanvas" aria-hidden="true"></canvas>
-          <div id="splitDivider" class="splitDivider" aria-hidden="true"></div>
-
-          <div id="emptyState" class="empty">
-            <div class="emptyBox">
-              <div class="emptyTitle">Upload een afbeelding</div>
-              <div class="emptyText">Daarna kies je een lensprofiel en tweak je live met sliders.</div>
-            </div>
+      <div class="viewerInner">
+        <canvas id="canvas"></canvas>
+        <div id="emptyState" class="empty">
+          <div class="emptyBox">
+            <div class="emptyTitle">Upload een afbeelding</div>
+            <div class="emptyText">Daarna kies je een lensprofiel en export je een PNG.</div>
           </div>
         </div>
       </div>
-
       <div class="foot">
         <div class="pill" id="infoPill">Ready</div>
         <div class="pill mono" id="dimPill">—</div>
       </div>
     </section>
   </main>
+
+  <div id="detailOverlay" class="detail hidden">
+  <canvas id="detailBefore"></canvas>
+  <canvas id="detailAfter"></canvas>
+</div>
 
   <script src="gl.js"></script>
   <script src="app.js"></script>
