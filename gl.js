@@ -147,36 +147,22 @@
     const w = TVLGL._w;
     const h = TVLGL._h;
 
-    
-    // --- value mapping ---
-    // Supports both 0..1 (JSON presets) and -3..3 (UI slider experiments).
-    function clamp01(x){ return Math.max(0, Math.min(1, x)); }
-    function sigmoid(x){ return 1.0 / (1.0 + Math.exp(-x)); }
-    function norm01(v, fallback){
-      if(v === undefined || v === null || Number.isNaN(v)) return fallback;
-      // If user is in the “slider world” (-3..3 etc), map smoothly into 0..1.
-      if(v < 0 || v > 1) return clamp01(sigmoid(v));
-      return clamp01(v);
-    }
-const cfg = {
-      field:  norm01(p.fieldCurvature, 0.55),
-      edge:   norm01(p.edgeSoftness,   0.65),
-      coma:   norm01(p.coma,           0.45),
-      comaA:  norm01(p.comaAnamorph,   0.55),
-      ca:     norm01(p.ca,             0.18),
+    const cfg = {
+      field: (p.fieldCurvature ?? 0.55),
+      edge:  (p.edgeSoftness   ?? 0.65),
+      coma:  (p.coma           ?? 0.45),
+      comaA: (p.comaAnamorph   ?? 0.55),
+      ca:    (p.ca             ?? 0.18),
 
-      bloom:  norm01(p.bloom,          0.35),
-      warm:   norm01(p.bloomWarmth,    0.22),
+      bloom: (p.bloom          ?? 0.35),
+      warm:  (p.bloomWarmth    ?? 0.22),
 
-      vign:   norm01(p.vignette,       0.22),
-      ax:     (p.asymX ?? 0.0),
-      ay:     (p.asymY ?? 0.0),
-
-      // pupil vignetting (cat-eye feel) affects highlight glare shape near edges
-      pupil:  norm01(p.pupilVignette,  0.0),
+      vign:  (p.vignette       ?? 0.22),
+      ax:    (p.asymX          ?? 0.0),
+      ay:    (p.asymY          ?? 0.0),
 
       // "milk/veil" (optioneel in JSON als "veil")
-      veil:   norm01(p.veil,           0.25),
+      veil:  (p.veil           ?? 0.25),
     };
 
     gl.viewport(0, 0, w, h);
@@ -203,7 +189,9 @@ const cfg = {
     uni2(gl, TVLGL._prog, "uAsym",  cfg.ax, cfg.ay);
     uni1(gl, TVLGL._prog, "uVeil",  cfg.veil);
 
-    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    
+    uni1(gl, TVLGL._prog, "uPupil", cfg.pupil);
+gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
     // PASS 2: bloom extract -> texBloom (fbBloom)
     quad(gl, TVLGL._progBloom);
@@ -216,12 +204,12 @@ const cfg = {
     gl.bindTexture(gl.TEXTURE_2D, TVLGL._texA);
 
     uniS(gl, TVLGL._progBloom, "uTex", 0);
-    uni2(gl, TVLGL._progBloom, "uRes", w, h);
-    uni1(gl, TVLGL._progBloom, "uBloom", cfg.bloom);
+        uni2(gl, TVLGL._progBloom, "uRes", w, h);
+uni1(gl, TVLGL._progBloom, "uBloom", cfg.bloom);
     uni1(gl, TVLGL._progBloom, "uWarm",  cfg.warm);
-    uni1(gl, TVLGL._progBloom, "uPupil", cfg.pupil);
 
-    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+        uni1(gl, TVLGL._progBloom, "uPupil", cfg.pupil);
+gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
     // PASS 3: composite -> texFinal (fbFinal)
     quad(gl, TVLGL._progComp);
@@ -351,6 +339,7 @@ uniform float uVign;
 uniform vec2  uAsym;
 uniform float uVeil;
 
+uniform float uPupil;
 float luma(vec3 c){ return dot(c, vec3(0.2126,0.7152,0.0722)); }
 
 void main(){
@@ -361,7 +350,8 @@ void main(){
   float r = length(de);
 
   vec2 dir = normalize(de + 1e-6);
-  vec2 px = 1.0 / uRes;
+    vec2 tan = vec2(-dir.y, dir.x);
+vec2 px = 1.0 / uRes;
 
   float edge = smoothstep(0.18, 0.98, r);
 
@@ -377,7 +367,11 @@ void main(){
   );
 
   float blur = edge * (uEdge * 0.85 + uField * 0.25);
-  vec2 smear = dir * px * (uComa * edge) * 18.0;
+    float pupil = clamp(uPupil, 0.0, 1.0) * edge;
+  vec2 smearDir = normalize(mix(dir, tan, 0.65 * pupil) + 1e-6);
+  float smearLen = (uComa * edge) * mix(18.0, 28.0, pupil);
+  vec2 smear = smearDir * px * smearLen;
+
   vec3 smeared = texture2D(uTex, uvw + smear).rgb;
   col = mix(col, smeared, blur);
 
@@ -410,7 +404,8 @@ void main(){
   vec3 cL  = toLin(src);
   float y  = luma(cL);
 
-  float mask = smoothstep(0.65, 1.25, y) * clamp(uBloom, 0.0, 1.0);
+  // highlight mask (much more sensitive than before)
+  float mask = smoothstep(0.25, 0.75, y) * clamp(uBloom, 0.0, 1.0);
 
   vec2 d = vUv - vec2(0.5);
   float r = length(d);
@@ -420,10 +415,13 @@ void main(){
 
   vec2 px = 1.0 / uRes;
 
+  // tight glare: anisotropic with pupil-vignette "cat-eye" feel
   float tight = mix(1.0, 6.0, clamp(uBloom, 0.0, 1.0));
-  float aniso = 1.0 + (uPupil * edge) * 2.5;
+  float pupil = clamp(uPupil, 0.0, 1.0) * edge;
+  float aniso = 1.0 + pupil * 7.0;
+
   vec2 offT = tan * px * tight * aniso;
-  vec2 offR = dir * px * tight * mix(0.85, 0.25, uPupil * edge);
+  vec2 offR = dir * px * tight * mix(0.85, 0.12, pupil);
 
   vec3 sum = vec3(0.0);
   float w  = 0.0;
@@ -433,8 +431,7 @@ void main(){
   vec2 o3 = offT + offR;
   vec2 o4 = offT - offR;
 
-  vec3 s0 = toLin(texture2D(uTex, vUv).rgb);
-  sum += s0 * 0.24; w += 0.24;
+  sum += toLin(texture2D(uTex, vUv).rgb) * 0.24; w += 0.24;
   sum += toLin(texture2D(uTex, vUv + o1).rgb) * 0.12; w += 0.12;
   sum += toLin(texture2D(uTex, vUv - o1).rgb) * 0.12; w += 0.12;
   sum += toLin(texture2D(uTex, vUv + o2).rgb) * 0.12; w += 0.12;
@@ -444,10 +441,11 @@ void main(){
   sum += toLin(texture2D(uTex, vUv + o4).rgb) * 0.10; w += 0.10;
   sum += toLin(texture2D(uTex, vUv - o4).rgb) * 0.10; w += 0.10;
 
-  vec3 tightGlow = (sum / max(w, 1e-6));
+  vec3 tightGlow = sum / max(w, 1e-6);
 
+  // wide veiling glare: cheaper 4-tap, still shaped by pupil
   float wide = tight * 10.0;
-  vec2 wOffT = tan * px * wide * (1.0 + uPupil * edge * 3.0);
+  vec2 wOffT = tan * px * wide * (1.0 + pupil * 3.0);
   vec2 wOffR = dir * px * wide * 0.20;
 
   vec3 wideSum = vec3(0.0);
@@ -460,6 +458,7 @@ void main(){
   vec3 glow = tightGlow + wideSum * 0.35;
   glow *= mask;
 
+  // warm bias
   glow.r *= 1.0 + 0.55 * uWarm;
   glow.g *= 1.0 + 0.18 * uWarm;
   glow.b *= 1.0 - 0.10 * uWarm;
