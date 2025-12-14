@@ -164,7 +164,7 @@ select, input[type="file"]{
   inset:0;
   width:100%;
   height:100%;
-  /* default behavior is "contain": keep aspect, no stretching */
+  /* keep aspect, no stretching */
   object-fit: contain;
   image-rendering: auto;
 }

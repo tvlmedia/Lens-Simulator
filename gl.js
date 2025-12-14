@@ -337,15 +337,6 @@ uniform float uVeil;
 
 float luma(vec3 c){ return dot(c, vec3(0.2126,0.7152,0.0722)); }
 
-vec3 blur5(sampler2D tex, vec2 uv, vec2 px, float r){
-  vec3 c = texture2D(tex, uv).rgb;
-  c += texture2D(tex, uv + vec2( px.x, 0.0) * r).rgb;
-  c += texture2D(tex, uv + vec2(-px.x, 0.0) * r).rgb;
-  c += texture2D(tex, uv + vec2(0.0,  px.y) * r).rgb;
-  c += texture2D(tex, uv + vec2(0.0, -px.y) * r).rgb;
-  return c / 5.0;
-}
-
 void main(){
   vec2 c = vec2(0.5) + uAsym * 0.08;
   vec2 d = vUv - c;
@@ -368,18 +359,13 @@ void main(){
     texture2D(uTex, uvw).g,
     texture2D(uTex, uvw - ca).b
   );
-  // --- TRUE edge softness (blur), separate from coma ---
-  float softBase = (uEdge * 0.85 + uField * 0.25);
-  float soft = edge * clamp(softBase, 0.0, 10.0);
-  vec3 blurred = blur5(uTex, uvw, px, soft * 6.0);
-  col = mix(col, blurred, clamp(soft, 0.0, 1.0));
 
-  // --- Coma smear stays directional ---
-  float comaMix = edge * clamp(uComa, 0.0, 10.0);
-  vec2 smear = dir * px * comaMix * 18.0;
+  float blur = edge * (uEdge * 0.85 + uField * 0.25);
+  vec2 smear = dir * px * (uComa * edge) * 18.0;
   vec3 smeared = texture2D(uTex, uvw + smear).rgb;
-  col = mix(col, smeared, clamp(comaMix * 0.65, 0.0, 1.0));
-float vig = smoothstep(0.10, 1.00, r);
+  col = mix(col, smeared, blur);
+
+  float vig = smoothstep(0.10, 1.00, r);
   col *= (1.0 - uVign * 0.55 * vig);
 
   float y = luma(col);
@@ -389,7 +375,8 @@ float vig = smoothstep(0.10, 1.00, r);
   gl_FragColor = vec4(col, 1.0);
 }
 `;
-const FRAG_BLOOM = `
+
+  const FRAG_BLOOM = `
 precision mediump float;
 varying vec2 vUv;
 uniform sampler2D uTex;

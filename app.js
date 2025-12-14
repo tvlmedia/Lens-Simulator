@@ -7,7 +7,6 @@
    - Export PNG + Export Split
    Shortcuts:
      S = split
-     D = detail viewer
      P = fullscreen
 */
 
@@ -30,18 +29,19 @@ let liveParams = {};     // mutable copy of active profile
 let splitOn = false;
 
 // ---------- param definitions ----------
+// NOTE: keys must match gl.js reads (p.<key>)
 const PARAMS = [
-  { key:"fieldCurvature", label:"Field curvature", min:-3,   max:3.0, step:0.01 },
-  { key:"edgeSoftness",   label:"Edge softness",   min:0,   max:5.0, step:0.01 },
-  { key:"coma",           label:"Coma",            min:-3,   max:3.0, step:0.01 },
-  { key:"comaAnamorph",   label:"Coma anamorph",   min:-3,   max:3.0, step:0.01 },
-  { key:"bloom",          label:"Bloom",           min:-3,   max:3.0, step:0.01 },
-  { key:"bloomWarmth",    label:"Bloom warmth",    min:-3,  max:3.0, step:0.01 },
-  { key:"ca",             label:"CA",              min:-3,   max:3.0, step:0.01 },
-  { key:"vignette",       label:"Vignette",        min:0,   max:3.0, step:0.01 },
-  { key:"asymX",          label:"Asym X",          min:-3,  max:3.0, step:0.01 },
-  { key:"asymY",          label:"Asym Y",          min:-3,  max:3.0, step:0.01 },
-  { key:"veil",           label:"Veil",            min:0,   max:3.0, step:0.01 },
+  { key:"fieldCurvature", label:"Field curvature", min:-3, max: 3, step:0.01 },
+  { key:"edgeSoftness",   label:"Edge softness",   min:-3, max: 3, step:0.01 },
+  { key:"coma",           label:"Coma",            min:-3, max: 3, step:0.01 },
+  { key:"comaAnamorph",   label:"Coma anamorph",   min:-3, max: 3, step:0.01 },
+  { key:"bloom",          label:"Bloom",           min:-3, max: 3, step:0.01 },
+  { key:"bloomWarmth",    label:"Bloom warmth",    min:-3, max: 3, step:0.01 },
+  { key:"ca",             label:"CA",              min:-3, max: 3, step:0.01 },
+  { key:"vignette",       label:"Vignette",        min:-3, max: 3, step:0.01 },
+  { key:"asymX",          label:"Asym X",          min:-3, max: 3, step:0.01 },
+  { key:"asymY",          label:"Asym Y",          min:-3, max: 3, step:0.01 },
+  { key:"veil",           label:"Veil",            min:-3, max: 3, step:0.01 },
 ];
 
 // ---------- UI helpers ----------
@@ -65,29 +65,26 @@ function resizeCanvases(w,h){
 }
 
 function clamp(v, min, max){
-  if(Number.isNaN(v)) return min;
+  v = parseFloat(v);
+  if(Number.isNaN(v)) v = 0;
   return Math.max(min, Math.min(max, v));
 }
 
 // ---------- profiles ----------
-function loadProfiles(){
-  return fetch("gl_profiles.json", { cache: "no-store" })
-    .then(r => {
-      if(!r.ok) throw new Error("HTTP " + r.status);
-      return r.json();
-    })
-    .then(j => {
-      profiles = j || {};
-      populateSelect();
-      setStatus("Profiles loaded", true);
-      loadLens(activeName);
-    })
-    .catch((e) => {
-      console.error("loadProfiles error:", e);
-      profiles = {};
-      populateSelect();
-      setStatus("Kon gl_profiles.json niet laden", false);
-    });
+async function loadProfiles(){
+  try{
+    const r = await fetch("gl_profiles.json", { cache: "no-store" });
+    if(!r.ok) throw new Error("HTTP " + r.status);
+    profiles = await r.json();
+    populateSelect();
+    setStatus("Profiles loaded", true);
+    loadLens(activeName);
+  }catch(e){
+    console.error("loadProfiles error:", e);
+    profiles = {};
+    populateSelect();
+    setStatus("Kon gl_profiles.json niet laden", false);
+  }
 }
 
 function populateSelect(){
@@ -95,7 +92,7 @@ function populateSelect(){
   if(!sel) return;
   sel.innerHTML = "";
 
-  const keys = Object.keys(profiles);
+  const keys = Object.keys(profiles || {});
   if(keys.length === 0){
     const opt = document.createElement("option");
     opt.value = "";
@@ -119,7 +116,9 @@ function populateSelect(){
 function loadLens(name){
   activeName = name || "";
   const prof = (activeName && profiles[activeName]) ? profiles[activeName] : {};
-  liveParams = structuredClone(prof || {});
+  // structuredClone is supported in modern Chrome; fallback for older.
+  try{ liveParams = structuredClone(prof || {}); }
+  catch{ liveParams = JSON.parse(JSON.stringify(prof || {})); }
   ensureParamsDefaults();
   updateParamsUIFromLive();
   render();
@@ -128,8 +127,9 @@ function loadLens(name){
 function ensureParamsDefaults(){
   PARAMS.forEach(d=>{
     if(liveParams[d.key] === undefined || liveParams[d.key] === null){
-      liveParams[d.key] = (d.min + d.max) * 0.5;
+      liveParams[d.key] = 0;
     }
+    liveParams[d.key] = clamp(liveParams[d.key], d.min, d.max);
   });
 }
 
@@ -165,9 +165,7 @@ function buildParamsPanel(){
       const d = PARAMS.find(x=>x.key===key);
       if(!d) return;
 
-      const raw = parseFloat(e.target.value);
-      const v = clamp(raw, d.min, d.max);
-
+      const v = clamp(e.target.value, d.min, d.max);
       liveParams[key] = v;
 
       panel.querySelectorAll(`[data-param="${key}"]`).forEach(el=>{
@@ -193,7 +191,7 @@ function updateParamsUIFromLive(){
   const panel = $("paramsPanel");
   if(!panel) return;
   PARAMS.forEach(def=>{
-    const v = clamp(parseFloat(liveParams[def.key]), def.min, def.max);
+    const v = clamp(liveParams[def.key], def.min, def.max);
     panel.querySelectorAll(`[data-param="${def.key}"]`).forEach(el=>{
       el.value = String(v);
     });
@@ -206,7 +204,7 @@ function loadImageFile(file, cb){
   const url = URL.createObjectURL(file);
   const img = new Image();
   img.decoding = "async";
-  img.onload = () => { cb(img); URL.revokeObjectURL(url); };
+  img.onload = () => { cb(img); setTimeout(()=>URL.revokeObjectURL(url), 1000); };
   img.onerror = () => { setStatus("Kon afbeelding niet laden", false); URL.revokeObjectURL(url); };
   img.src = url;
 }
@@ -236,7 +234,7 @@ function onRefFile(file){
     refImg = img;
     setStatus("Reference loaded", true);
     redrawReferenceLayer();
-    if(splitOn) render(); // keep after fresh too
+    if(splitOn) render();
   });
 }
 
@@ -251,8 +249,7 @@ function drawImageToCtx(ctx, img){
   if(!ctx || !img || !srcW || !srcH) return;
   ctx.setTransform(1,0,0,1,0,0);
   ctx.clearRect(0,0,srcW,srcH);
-
-  // NOTE: if reference size differs, this stretches to match. (Usually reference should be same frame/size)
+  // stretch to match canvas size (assumes same framing)
   ctx.drawImage(img, 0, 0, srcW, srcH);
 }
 
@@ -275,7 +272,6 @@ function drawAfter(){
   if(window.TVLGL && typeof TVLGL.render === "function"){
     const ok = TVLGL.render(srcImg, liveParams || {}, canvas);
     if(ok){
-      setStatus(`Lens: ${activeName || "—"} (live)`, true);
       return true;
     }
     console.warn("TVLGL.render returned false (WebGL failed).");
@@ -283,8 +279,8 @@ function drawAfter(){
     console.warn("TVLGL not found. Check that gl.js is loaded before app.js.");
   }
 
+  // fallback
   drawBeforeSingle();
-  setStatus("WebGL niet beschikbaar → toon originele", false);
   return false;
 }
 
@@ -301,7 +297,8 @@ function render(){
     return;
   }
 
-  drawAfter();
+  const ok = drawAfter();
+  setStatus(ok ? `Lens: ${activeName || "—"} (live)` : "WebGL niet beschikbaar → toon originele", ok);
 }
 
 // ---------- exports ----------
@@ -336,17 +333,14 @@ function exportSplit(){
 
   const half = Math.floor(srcW/2);
 
-  // LEFT = reference (or clean if none)
-  const leftImg = refImg || srcImg;
-  tctx.drawImage(leftImg, 0, 0, srcW, srcH); // fills whole
-  // but we only keep left half (cheaper: draw and clip)
+  // LEFT = reference layer (or clean if none)
+  tctx.drawImage(refCanvas, 0, 0, srcW, srcH);
   const leftData = tctx.getImageData(0,0,half,srcH);
 
-  // Clear and rebuild explicitly (prevents any weird alpha)
   tctx.clearRect(0,0,srcW,srcH);
   tctx.putImageData(leftData, 0, 0);
 
-  // RIGHT = after canvas (copy only right half)
+  // RIGHT = after canvas
   tctx.drawImage(canvas, half, 0, srcW-half, srcH, half, 0, srcW-half, srcH);
 
   // divider
@@ -396,18 +390,16 @@ function setSplit(on){
     setStatus("Split OFF", true);
   }
 
-  // render keeps AFTER; CSS handles split crop
   render();
 }
 
 function toggleSplit(){ setSplit(!splitOn); }
 
 // =====================================================
-// Random flare / asym helpers (optional)
+// Random flare helper (proxy)
 // =====================================================
 function randomizeFlare(){
   if(!liveParams) return;
-  // flare direction lives in asymX/asymY in your shader setup
   liveParams.asymX = (Math.random()*2 - 1) * 0.35;
   liveParams.asymY = (Math.random()*2 - 1) * 0.35;
   updateParamsUIFromLive();
@@ -445,9 +437,7 @@ function boot(){
     setStatus("Reference = clean", true);
   });
 
-  safeOn("clearRef", "click", ()=>{
-    clearReference();
-  });
+  safeOn("clearRef", "click", ()=>{ clearReference(); });
 
   safeOn("presetSelect", "change", (e)=> loadLens(e.target.value));
   safeOn("resetParams", "click", ()=> loadLens(activeName));
@@ -456,7 +446,6 @@ function boot(){
 
   safeOn("exportPng", "click", ()=>{
     if(!srcImg) return;
-    // Ensure current state is after (unless user forced before view)
     if($("showBefore")?.checked && !splitOn) drawBeforeSingle();
     else drawAfter();
     exportCanvas(`TVL_LensEmulator_${safeName(activeName)}.png`, canvas);
@@ -467,15 +456,13 @@ function boot(){
   safeOn("fullscreenBtn", "click", toggleFullscreen);
   safeOn("splitBtn", "click", toggleSplit);
 
+  $("showBefore")?.addEventListener("change", render);
+
   // keyboard shortcuts
   window.addEventListener("keydown", (e)=>{
     if(e.key === "p" || e.key === "P"){ e.preventDefault(); toggleFullscreen(); }
     if(e.key === "s" || e.key === "S"){ e.preventDefault(); toggleSplit(); }
-    // D left for your existing detail viewer implementation in gl.js/app.js (not included here)
   });
-
-  // auto-fit viewer (CSS contain) already, but keep checkbox for future
-  safeOn("autoFit", "change", ()=>{ /* reserved */ });
 
   setStatus("Ready", true);
 }
