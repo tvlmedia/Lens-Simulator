@@ -10,19 +10,21 @@
     "vignette": 0.08,
     "asymX": 0.0,
     "asymY": 0.0,
-    "veil": 0.0
+    "veil": 0.0,
+    "pupilVignette": 0.0
   },
   "IronGlass Soviet MKII (50mm T2.8)": {
-    "fieldCurvature": 0.85,
-    "edgeSoftness": 0.95,
-    "coma": 0.95,
-    "comaAnamorph": 0.65,
-    "bloom": 0.55,
-    "bloomWarmth": 0.3,
-    "ca": 0.35,
-    "vignette": 0.55,
+    "fieldCurvature": 0.75,
+    "edgeSoftness": 0.7,
+    "coma": 0.6,
+    "comaAnamorph": 0.55,
+    "bloom": 0.45,
+    "bloomWarmth": 0.25,
+    "ca": 0.25,
+    "vignette": 0.45,
     "asymX": 0.2,
     "asymY": -0.12,
-    "veil": 0.4
+    "veil": 0.3,
+    "pupilVignette": 0.55
   }
 }

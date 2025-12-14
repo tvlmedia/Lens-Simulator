@@ -41,6 +41,7 @@ const PARAMS = [
   { key:"vignette",       label:"Vignette",        min:-3, max: 3, step:0.01 },
   { key:"asymX",          label:"Asym X",          min:-3, max: 3, step:0.01 },
   { key:"asymY",          label:"Asym Y",          min:-3, max: 3, step:0.01 },
+  { key:"pupilVignette", label:"Pupil vignette (cat-eye)", min:-3, max: 3, step:0.01 },
   { key:"veil",           label:"Veil",            min:-3, max: 3, step:0.01 },
 ];
 
