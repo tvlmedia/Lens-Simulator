@@ -1,20 +1,28 @@
 {
   "DZO Arles (clean)": {
-    "globalSoft": 0.0,
+    "fieldCurvature": 0.55,
     "edgeSoftness": 0.0,
     "coma": 0.0,
+    "comaAnamorph": 0.0,
     "bloom": 0.0,
     "bloomWarmth": 0.0,
-    "halation": 0.0,
+    "ca": 0.0,
+    "vignette": 0.0,
+    "asymX": 0.0,
+    "asymY": 0.0,
     "veil": 0.0
   },
   "IronGlass Soviet MKII (50mm T2.8)": {
-    "globalSoft": 0.18,
+    "fieldCurvature": 0.85,
     "edgeSoftness": 0.95,
-    "coma": 0.40,
-    "bloom": 0.85,
-    "bloomWarmth": 0.18,
-    "halation": 0.32,
-    "veil": 0.20
+    "coma": 0.95,
+    "comaAnamorph": 0.65,
+    "bloom": 0.55,
+    "bloomWarmth": 0.30,
+    "ca": 0.35,
+    "vignette": 0.55,
+    "asymX": 0.20,
+    "asymY": -0.12,
+    "veil": 0.40
   }
 }
